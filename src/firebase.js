@@ -1,21 +1,20 @@
 // src/firebase.js
-// Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
-// Your web app's Firebase configuration
+// Firebase 구성
 const firebaseConfig = {
-  apiKey: "AIzaSyA9dph3ctzhtT1QUzoCwXp7G6ElD9Oya6Q",
-  authDomain: "smart-coach-41850.firebaseapp.com",
-  projectId: "smart-coach-41850",
-  storageBucket: "smart-coach-41850.firebasestorage.app",
-  messagingSenderId: "643154595272",
-  appId: "1:643154595272:web:2e4bfc3b0a9ad2a04904fd"
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.REACT_APP_FIREBASE_APP_ID
 };
 
-// Initialize Firebase
+// Firebase 초기화
 const app = initializeApp(firebaseConfig);
 
 // Firebase 서비스 내보내기

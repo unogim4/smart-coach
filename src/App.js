@@ -7,37 +7,44 @@ import Home from './pages/Home';
 import Courses from './pages/Courses';
 import Analysis from './pages/Analysis';
 import Profile from './pages/Profile';
-import Login from './pages/Login'; // 새로 만들 페이지
+import Login from './pages/Login';
+import { ThemeProvider, createTheme } from '@mui/material/styles';
+import CssBaseline from '@mui/material/CssBaseline';
+
+// 커스텀 테마 생성
+const theme = createTheme({
+  palette: {
+    primary: {
+      main: '#3b82f6', // 파란색 계열
+    },
+    secondary: {
+      main: '#10b981', // 녹색 계열
+    },
+  },
+});
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <div className="App">
-          <Header />
-          
-          <nav className="bg-gray-100 p-4">
-            <ul className="flex space-x-4 justify-center">
-              <li><Link to="/" className="text-blue-500 hover:text-blue-700">홈</Link></li>
-              <li><Link to="/courses" className="text-blue-500 hover:text-blue-700">코스 추천</Link></li>
-              <li><Link to="/analysis" className="text-blue-500 hover:text-blue-700">운동 분석</Link></li>
-              <li><Link to="/profile" className="text-blue-500 hover:text-blue-700">프로필</Link></li>
-              <li><Link to="/login" className="text-blue-500 hover:text-blue-700">로그인</Link></li>
-            </ul>
-          </nav>
-          
-          <main className="container mx-auto p-4">
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/courses" element={<Courses />} />
-              <Route path="/analysis" element={<Analysis />} />
-              <Route path="/profile" element={<Profile />} />
-              <Route path="/login" element={<Login />} />
-            </Routes>
-          </main>
-        </div>
-      </Router>
-    </AuthProvider>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <AuthProvider>
+        <Router>
+          <div className="App">
+            <Header />
+            
+            <main style={{ padding: '20px' }}>
+              <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/courses" element={<Courses />} />
+                <Route path="/analysis" element={<Analysis />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="/login" element={<Login />} />
+              </Routes>
+            </main>
+          </div>
+        </Router>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 
