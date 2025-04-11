@@ -1,7 +1,49 @@
 import React, { useState, useEffect } from 'react';
+import { Container, Typography, Grid, Card, CardContent } from '@mui/material';
 import CourseSelector from '../components/CourseSelector';
 import CourseCard from '../components/CourseCard';
 import { getCourses } from '../services/courseService';
+
+// 네이버 지도 컴포넌트
+function NaverMap() {
+  const mapRef = React.useRef(null);
+  
+  useEffect(() => {
+    // 네이버 지도 스크립트 로드
+    const script = document.createElement('script');
+    script.src = `https://openapi.map.naver.com/openapi/v3/maps.js?ncpClientId=f3clw1exyg`;
+    script.async = true;
+    
+    script.onload = () => {
+      // 스크립트 로드 완료 후 지도 생성
+      const mapOptions = {
+        center: new window.naver.maps.LatLng(37.5666805, 126.9784147),
+        zoom: 14
+      };
+      
+      const map = new window.naver.maps.Map(mapRef.current, mapOptions);
+      
+      // 마커 생성
+      const marker = new window.naver.maps.Marker({
+        position: new window.naver.maps.LatLng(37.5666805, 126.9784147),
+        map: map
+      });
+    };
+    
+    document.head.appendChild(script);
+    
+    // 컴포넌트 언마운트 시 스크립트 제거
+    return () => {
+      if (document.head.contains(script)) {
+        document.head.removeChild(script);
+      }
+    };
+  }, []);
+  
+  return (
+    <div ref={mapRef} style={{ width: '100%', height: '400px' }}></div>
+  );
+}
 
 function Courses() {
   const [courses, setCourses] = useState([]);
@@ -54,6 +96,16 @@ function Courses() {
         </div>
         
         <div className="md:col-span-2">
+          {/* 네이버 지도 추가 */}
+          <Card style={{ marginBottom: '20px' }}>
+            <CardContent>
+              <Typography variant="h6" style={{ marginBottom: '10px' }}>
+                코스 지도
+              </Typography>
+              <NaverMap />
+            </CardContent>
+          </Card>
+          
           <h3 className="text-xl font-semibold mb-4">추천 코스</h3>
           
           {loading ? (

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Box, 
@@ -18,6 +18,71 @@ import DirectionsBikeIcon from '@mui/icons-material/DirectionsBike';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import WbSunnyIcon from '@mui/icons-material/WbSunny';
 import AirIcon from '@mui/icons-material/Air';
+
+// 네이버 지도 컴포넌트
+function NaverMap() {
+  const mapRef = React.useRef(null);
+  const [userLocation, setUserLocation] = useState({ lat: 37.5666805, lng: 126.9784147 }); // 기본값: 서울
+  
+  useEffect(() => {
+    // 사용자 현재 위치 가져오기
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          });
+        },
+        (error) => {
+          console.error("현재 위치를 가져올 수 없습니다:", error);
+        }
+      );
+    }
+    
+    // 네이버 지도 스크립트 로드
+    const script = document.createElement('script');
+    script.src = `https://openapi.map.naver.com/openapi/v3/maps.js?ncpClientId=f3clw1exyg`;
+    script.async = true;
+    
+    script.onload = () => {
+      // 스크립트 로드 완료 후 지도 생성
+      const mapOptions = {
+        center: new window.naver.maps.LatLng(userLocation.lat, userLocation.lng),
+        zoom: 15
+      };
+      
+      const map = new window.naver.maps.Map(mapRef.current, mapOptions);
+      
+      // 마커 생성
+      const marker = new window.naver.maps.Marker({
+        position: new window.naver.maps.LatLng(userLocation.lat, userLocation.lng),
+        map: map,
+        title: '현재 위치'
+      });
+    };
+    
+    document.head.appendChild(script);
+    
+    // 컴포넌트 언마운트 시 스크립트 제거
+    return () => {
+      if (document.head.contains(script)) {
+        document.head.removeChild(script);
+      }
+    };
+  }, [userLocation]);
+  
+  return (
+    <div 
+      ref={mapRef} 
+      style={{ 
+        width: '100%', 
+        height: '300px', 
+        borderRadius: '8px'
+      }}
+    ></div>
+  );
+}
 
 function Home() {
   // 날씨 데이터 (가상)
@@ -110,6 +175,19 @@ function Home() {
               <Divider sx={{ my: 2 }} />
               <Typography variant="body2" color="textSecondary">
                 {weatherData.recommendation}
+              </Typography>
+            </CardContent>
+          </Card>
+
+          {/* 네이버 지도 추가 */}
+          <Card sx={{ mb: 4 }}>
+            <CardContent>
+              <Typography variant="h6" fontWeight="medium" gutterBottom>
+                내 주변 지도
+              </Typography>
+              <NaverMap />
+              <Typography variant="body2" color="textSecondary" sx={{ mt: 2 }}>
+                현재 위치를 기반으로 주변 러닝/바이크 코스를 확인하세요.
               </Typography>
             </CardContent>
           </Card>
