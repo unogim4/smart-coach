@@ -1,5 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { recommendCourses, calculateDistance } from '../services/recommendationService';
+import { 
+  Box, 
+  Typography, 
+  Card, 
+  CardContent, 
+  Button, 
+  Divider,
+  Paper, 
+  CircularProgress
+} from '@mui/material';
+import { recommendCourses } from '../services/recommendationService';
 import CourseFilterOptions from './CourseFilterOptions';
 
 function RecommendedCourseMap({ initialPreferences = {} }) {
@@ -164,87 +174,110 @@ function RecommendedCourseMap({ initialPreferences = {} }) {
   };
 
   return (
-    <div className="bg-white p-4 rounded-lg shadow">
-      <h3 className="text-lg font-semibold mb-3">추천 코스 지도</h3>
-      
-      {loading ? (
-        <div className="h-64 flex items-center justify-center bg-gray-100 rounded-lg">
-          <p>위치 정보를 가져오는 중...</p>
-        </div>
-      ) : error ? (
-        <div className="h-64 flex items-center justify-center bg-gray-100 rounded-lg">
-          <p className="text-red-500">{error}</p>
-        </div>
-      ) : (
-        <>
-          {/* 필터링 옵션 */}
-          <CourseFilterOptions 
-            initialPreferences={preferences}
-            onFilterChange={handleFilterChange}
-          />
-          
-          <div className="h-64 bg-gray-100 rounded-lg mb-4" ref={mapRef}></div>
-          
-          {courses.length > 0 ? (
-            <div>
-              <div className="flex justify-between mb-3">
-                <div>
-                  <h4 className="font-semibold">{selectedCourse?.name}</h4>
-                  <p className="text-sm text-gray-600">{selectedCourse?.description}</p>
-                </div>
-                <div className="text-right">
-                  <div className="text-sm">거리: {selectedCourse?.distance} km</div>
-                  <div className="text-sm">난이도: {selectedCourse?.difficulty}</div>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-2">
-                <button 
-                  className="bg-blue-500 text-white px-3 py-1 rounded"
-                  onClick={() => window.open(`https://map.naver.com/v5/directions/-/${selectedCourse?.startLocation.lng},${selectedCourse?.startLocation.lat}`, '_blank')}
-                >
-                  길 안내 받기
-                </button>
-                <button className="bg-green-500 text-white px-3 py-1 rounded">
-                  코스 저장하기
-                </button>
-              </div>
-              
-              {courses.length > 1 && (
-                <div className="mt-4">
-                  <h4 className="font-semibold mb-2">다른 추천 코스</h4>
-                  <div className="space-y-2">
-                    {courses.slice(1, 3).map(course => (
-                      <div 
-                        key={course.id} 
-                        className="p-2 border rounded cursor-pointer hover:bg-gray-50"
-                        onClick={() => setSelectedCourse(course)}
-                      >
-                        <div className="flex justify-between">
-                          <div>
-                            <div className="font-medium">{course.name}</div>
-                            <div className="text-xs text-gray-500">난이도: {course.difficulty}</div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-sm">{course.distance} km</div>
-                            <div className="text-xs text-gray-500">시작점까지 {course.distanceToStart.toFixed(1)} km</div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="text-center py-4">
-              <p>근처에 추천할 코스가 없습니다.</p>
-              <p className="text-sm text-gray-500 mt-2">필터 옵션을 변경해보세요.</p>
-            </div>
-          )}
-        </>
-      )}
-    </div>
+    <Card>
+      <CardContent>
+        <Typography variant="h6" fontWeight="medium" gutterBottom>
+          추천 코스 찾기
+        </Typography>
+        
+        {loading ? (
+          <Box sx={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <CircularProgress />
+          </Box>
+        ) : error ? (
+          <Box sx={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Typography color="error">{error}</Typography>
+          </Box>
+        ) : (
+          <>
+            {/* 필터링 옵션 */}
+            <CourseFilterOptions 
+              initialPreferences={preferences}
+              onFilterChange={handleFilterChange}
+            />
+            
+            <Box sx={{ height: 300, mb: 2, borderRadius: 1, overflow: 'hidden' }} ref={mapRef} />
+            
+            {courses.length > 0 ? (
+              <Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+                  <Box>
+                    <Typography variant="subtitle1" fontWeight="medium">{selectedCourse?.name}</Typography>
+                    <Typography variant="body2" color="textSecondary">{selectedCourse?.description}</Typography>
+                  </Box>
+                  <Box textAlign="right">
+                    <Typography variant="body2">거리: {selectedCourse?.distance} km</Typography>
+                    <Typography variant="body2">난이도: {selectedCourse?.difficulty}</Typography>
+                  </Box>
+                </Box>
+                
+                <Box sx={{ display: 'flex', gap: 1, mb: 3 }}>
+                  <Button 
+                    variant="contained"
+                    color="primary"
+                    size="small"
+                    onClick={() => window.open(`https://map.naver.com/v5/directions/-/${selectedCourse?.startLocation.lng},${selectedCourse?.startLocation.lat}`, '_blank')}
+                    sx={{ flex: 1 }}
+                  >
+                    길 안내 받기
+                  </Button>
+                  <Button 
+                    variant="contained"
+                    color="secondary"
+                    size="small"
+                    sx={{ flex: 1 }}
+                  >
+                    코스 저장하기
+                  </Button>
+                </Box>
+                
+                {courses.length > 1 && (
+                  <Box>
+                    <Typography variant="subtitle2" fontWeight="medium" gutterBottom>
+                      다른 추천 코스
+                    </Typography>
+                    <Box sx={{ mt: 1 }}>
+                      {courses.slice(1, 3).map(course => (
+                        <Paper 
+                          key={course.id} 
+                          sx={{ 
+                            p: 1.5, 
+                            mb: 1, 
+                            cursor: 'pointer',
+                            '&:hover': { bgcolor: '#f5f5f5' }
+                          }}
+                          onClick={() => setSelectedCourse(course)}
+                          elevation={0}
+                          variant="outlined"
+                        >
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <Box>
+                              <Typography variant="body2" fontWeight="medium">{course.name}</Typography>
+                              <Typography variant="caption" color="textSecondary">난이도: {course.difficulty}</Typography>
+                            </Box>
+                            <Box textAlign="right">
+                              <Typography variant="body2">{course.distance} km</Typography>
+                              <Typography variant="caption" color="textSecondary">시작점까지 {course.distanceToStart.toFixed(1)} km</Typography>
+                            </Box>
+                          </Box>
+                        </Paper>
+                      ))}
+                    </Box>
+                  </Box>
+                )}
+              </Box>
+            ) : (
+              <Box sx={{ textAlign: 'center', py: 3 }}>
+                <Typography color="textSecondary">근처에 추천할 코스가 없습니다.</Typography>
+                <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+                  필터 옵션을 변경해보세요.
+                </Typography>
+              </Box>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

@@ -4,7 +4,6 @@ import {
   Box, 
   Card, 
   CardContent, 
-  CardActions, 
   Container, 
   Grid, 
   Typography, 
@@ -18,21 +17,44 @@ import DirectionsBikeIcon from '@mui/icons-material/DirectionsBike';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import WbSunnyIcon from '@mui/icons-material/WbSunny';
 import AirIcon from '@mui/icons-material/Air';
+import { recommendCourses } from '../services/recommendationService';
 
 // 네이버 지도 컴포넌트
 function NaverMap() {
   const mapRef = React.useRef(null);
   const [userLocation, setUserLocation] = useState({ lat: 37.5666805, lng: 126.9784147 }); // 기본값: 서울
+  const [selectedCourse, setSelectedCourse] = useState(null);
+  const [courses, setCourses] = useState([]);
   
   useEffect(() => {
     // 사용자 현재 위치 가져오기
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          setUserLocation({
+          const location = {
             lat: position.coords.latitude,
             lng: position.coords.longitude
-          });
+          };
+          setUserLocation(location);
+          
+          // 위치를 기반으로 코스 추천
+          const userPreferences = {
+            type: 'running',
+            maxDistance: 10,
+            maxStartDistance: 5,
+            difficulty: 'beginner'
+          };
+          
+          // recommendCourses 함수 호출
+          try {
+            const recommendedCourses = recommendCourses(location, userPreferences);
+            setCourses(recommendedCourses);
+            if (recommendedCourses.length > 0) {
+              setSelectedCourse(recommendedCourses[0]);
+            }
+          } catch (error) {
+            console.error("코스 추천 중 오류:", error);
+          }
         },
         (error) => {
           console.error("현재 위치를 가져올 수 없습니다:", error);
@@ -54,12 +76,53 @@ function NaverMap() {
       
       const map = new window.naver.maps.Map(mapRef.current, mapOptions);
       
-      // 마커 생성
+      // 현재 위치 마커 생성
       const marker = new window.naver.maps.Marker({
         position: new window.naver.maps.LatLng(userLocation.lat, userLocation.lng),
         map: map,
         title: '현재 위치'
       });
+      
+      // 추천 코스가 있으면 지도에 표시
+      if (selectedCourse) {
+        try {
+          // 경로 포인트 생성
+          const path = selectedCourse.pointsOfInterest.map(
+            point => new window.naver.maps.LatLng(point.lat, point.lng)
+          );
+          
+          // 경로 그리기
+          const polyline = new window.naver.maps.Polyline({
+            map: map,
+            path: path,
+            strokeColor: '#5347AA',
+            strokeWeight: 5,
+            strokeOpacity: 0.8
+          });
+          
+          // 코스 시작점 마커
+          const startMarker = new window.naver.maps.Marker({
+            position: new window.naver.maps.LatLng(
+              selectedCourse.startLocation.lat, 
+              selectedCourse.startLocation.lng
+            ),
+            map: map,
+            title: `${selectedCourse.name} 시작점`,
+            icon: {
+              content: '<div style="padding: 5px; background-color: green; color: white; border-radius: 3px;">시작</div>',
+              anchor: new window.naver.maps.Point(20, 10)
+            }
+          });
+          
+          // 모든 경로가 보이도록 지도 경계 조정
+          const bounds = new window.naver.maps.LatLngBounds();
+          path.forEach(point => bounds.extend(point));
+          bounds.extend(new window.naver.maps.LatLng(userLocation.lat, userLocation.lng));
+          map.fitBounds(bounds);
+        } catch (error) {
+          console.error("코스 표시 중 오류:", error);
+        }
+      }
     };
     
     document.head.appendChild(script);
@@ -70,17 +133,42 @@ function NaverMap() {
         document.head.removeChild(script);
       }
     };
-  }, [userLocation]);
+  }, [userLocation, selectedCourse]);
   
   return (
-    <div 
-      ref={mapRef} 
-      style={{ 
-        width: '100%', 
-        height: '300px', 
-        borderRadius: '8px'
-      }}
-    ></div>
+    <div>
+      <div 
+        ref={mapRef} 
+        style={{ 
+          width: '100%', 
+          height: '300px', 
+          borderRadius: '8px'
+        }}
+      ></div>
+      
+      {selectedCourse && (
+        <Box sx={{ mt: 2 }}>
+          <Typography variant="subtitle1" fontWeight="medium">
+            추천 코스: {selectedCourse.name}
+          </Typography>
+          <Typography variant="body2" color="textSecondary">
+            {selectedCourse.description}
+          </Typography>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
+            <Typography variant="body2">거리: {selectedCourse.distance}km</Typography>
+            <Typography variant="body2">난이도: {selectedCourse.difficulty}</Typography>
+          </Box>
+          <Button 
+            variant="contained" 
+            size="small" 
+            sx={{ mt: 1 }}
+            onClick={() => window.open(`https://map.naver.com/v5/directions/-/${selectedCourse.startLocation.lng},${selectedCourse.startLocation.lat}`, '_blank')}
+          >
+            길 안내 받기
+          </Button>
+        </Box>
+      )}
+    </div>
   );
 }
 
@@ -179,15 +267,15 @@ function Home() {
             </CardContent>
           </Card>
 
-          {/* 네이버 지도 추가 */}
+          {/* 네이버 지도 추가 - 개선된 추천 코스 기능으로 수정 */}
           <Card sx={{ mb: 4 }}>
             <CardContent>
               <Typography variant="h6" fontWeight="medium" gutterBottom>
-                내 주변 지도
+                내 주변 추천 코스
               </Typography>
               <NaverMap />
               <Typography variant="body2" color="textSecondary" sx={{ mt: 2 }}>
-                현재 위치를 기반으로 주변 러닝/바이크 코스를 확인하세요.
+                현재 위치를 기반으로 주변 러닝/바이크 코스를 자동으로 추천합니다.
               </Typography>
             </CardContent>
           </Card>
