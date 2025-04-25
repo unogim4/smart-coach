@@ -18,6 +18,7 @@ import BarChartIcon from '@mui/icons-material/BarChart';
 import WbSunnyIcon from '@mui/icons-material/WbSunny';
 import AirIcon from '@mui/icons-material/Air';
 import { recommendCourses } from '../services/recommendationService';
+import { getWeatherByLocation, getAirQualityByLocation, getExerciseRecommendation } from '../services/weatherService';
 
 // 네이버 지도 컴포넌트
 function NaverMap() {
@@ -25,8 +26,11 @@ function NaverMap() {
   const [userLocation, setUserLocation] = useState({ lat: 37.5666805, lng: 126.9784147 }); // 기본값: 서울
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [courses, setCourses] = useState([]);
+  const [map, setMap] = useState(null); // 네이버 지도 객체 저장
   
   useEffect(() => {
+    console.log('네이버맵 useEffect 실행:', userLocation, selectedCourse);
+    
     // 사용자 현재 위치 가져오기
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -62,78 +66,82 @@ function NaverMap() {
       );
     }
     
-    // 네이버 지도 스크립트 로드
-    const script = document.createElement('script');
-    script.src = `https://openapi.map.naver.com/openapi/v3/maps.js?ncpClientId=f3clw1exyg`;
-    script.async = true;
-    
-    script.onload = () => {
-      // 스크립트 로드 완료 후 지도 생성
-      const mapOptions = {
-        center: new window.naver.maps.LatLng(userLocation.lat, userLocation.lng),
-        zoom: 15
-      };
-      
-      const map = new window.naver.maps.Map(mapRef.current, mapOptions);
-      
-      // 현재 위치 마커 생성
-      const marker = new window.naver.maps.Marker({
-        position: new window.naver.maps.LatLng(userLocation.lat, userLocation.lng),
-        map: map,
-        title: '현재 위치'
-      });
-      
-      // 추천 코스가 있으면 지도에 표시
-      if (selectedCourse) {
-        try {
-          // 경로 포인트 생성
-          const path = selectedCourse.pointsOfInterest.map(
-            point => new window.naver.maps.LatLng(point.lat, point.lng)
-          );
-          
-          // 경로 그리기
-          const polyline = new window.naver.maps.Polyline({
-            map: map,
-            path: path,
-            strokeColor: '#5347AA',
-            strokeWeight: 5,
-            strokeOpacity: 0.8
-          });
-          
-          // 코스 시작점 마커
-          const startMarker = new window.naver.maps.Marker({
-            position: new window.naver.maps.LatLng(
-              selectedCourse.startLocation.lat, 
-              selectedCourse.startLocation.lng
-            ),
-            map: map,
-            title: `${selectedCourse.name} 시작점`,
-            icon: {
-              content: '<div style="padding: 5px; background-color: green; color: white; border-radius: 3px;">시작</div>',
-              anchor: new window.naver.maps.Point(20, 10)
-            }
-          });
-          
-          // 모든 경로가 보이도록 지도 경계 조정
-          const bounds = new window.naver.maps.LatLngBounds();
-          path.forEach(point => bounds.extend(point));
-          bounds.extend(new window.naver.maps.LatLng(userLocation.lat, userLocation.lng));
-          map.fitBounds(bounds);
-        } catch (error) {
-          console.error("코스 표시 중 오류:", error);
+    // 이미 index.html에 로드된 네이버 지도 API 사용
+    let currentMap = map;
+    try {
+      console.log('네이버 지도 초기화 시도 (Home)...');
+      if (window.naver && window.naver.maps) {
+        // 지도 생성
+        const mapOptions = {
+          center: new window.naver.maps.LatLng(userLocation.lat, userLocation.lng),
+          zoom: 15
+        };
+        
+        const newMap = new window.naver.maps.Map(mapRef.current, mapOptions);
+        setMap(newMap); // 상태에 지도 객체 저장
+        currentMap = newMap; // 현재 스코프에서 사용할 지도 객체
+        console.log('네이버 지도 생성 성공 (Home)');
+        
+        // 현재 위치 마커 생성
+        const marker = new window.naver.maps.Marker({
+          position: new window.naver.maps.LatLng(userLocation.lat, userLocation.lng),
+          map: newMap,
+          title: '현재 위치'
+        });
+
+        // 추천 코스가 있으면 지도에 표시
+        if (selectedCourse) {
+          try {
+            // 경로 포인트 생성
+            const path = selectedCourse.pointsOfInterest.map(
+              point => new window.naver.maps.LatLng(point.lat, point.lng)
+            );
+            
+            // 경로 그리기
+            const polyline = new window.naver.maps.Polyline({
+              map: newMap, // 방금 생성한 지도 객체 사용
+              path: path,
+              strokeColor: '#5347AA',
+              strokeWeight: 5,
+              strokeOpacity: 0.8
+            });
+            
+            // 코스 시작점 마커
+            const startMarker = new window.naver.maps.Marker({
+              position: new window.naver.maps.LatLng(
+                selectedCourse.startLocation.lat, 
+                selectedCourse.startLocation.lng
+              ),
+              map: newMap, // 방금 생성한 지도 객체 사용
+              title: `${selectedCourse.name} 시작점`,
+              icon: {
+                content: '<div style="padding: 5px; background-color: green; color: white; border-radius: 3px;">시작</div>',
+                anchor: new window.naver.maps.Point(20, 10)
+              }
+            });
+            
+            // 모든 경로가 보이도록 지도 경계 조정
+            const bounds = new window.naver.maps.LatLngBounds();
+            path.forEach(point => bounds.extend(point));
+            bounds.extend(new window.naver.maps.LatLng(userLocation.lat, userLocation.lng));
+            // 새로 생성한 지도 객체에 bounds 적용
+            newMap.fitBounds(bounds);
+          } catch (error) {
+            console.error("코스 표시 중 오류:", error);
+          }
         }
+      } else {
+        console.error('네이버 지도 API가 로드되지 않았습니다 (Home)');
       }
-    };
+    } catch (error) {
+      console.error('네이버 지도 초기화 오류 (Home):', error);
+    }
     
-    document.head.appendChild(script);
-    
-    // 컴포넌트 언마운트 시 스크립트 제거
+    // 컴포넌트 언마운트 시 실행할 작업
     return () => {
-      if (document.head.contains(script)) {
-        document.head.removeChild(script);
-      }
+      // 필요한 정리 작업을 여기에 추가
     };
-  }, [userLocation, selectedCourse]);
+  }, [userLocation, selectedCourse, map]);
   
   return (
     <div>
@@ -173,14 +181,81 @@ function NaverMap() {
 }
 
 function Home() {
-  // 날씨 데이터 (가상)
-  const weatherData = {
+  // 날씨 관련 상태
+  const [weatherData, setWeatherData] = useState({
     temperature: 23,
     condition: 'sunny',
     location: '서울, 대한민국',
     airQuality: '좋음 (45)',
     recommendation: '오늘은 야외 운동하기 좋은 날씨입니다. 자외선 차단제를 바르고 충분한 수분 섭취를 하세요.'
-  };
+  });
+  const [loadingWeather, setLoadingWeather] = useState(false);
+  
+  // 날씨 데이터 가져오기
+  useEffect(() => {
+    const fetchWeatherData = async () => {
+      try {
+        setLoadingWeather(true);
+        
+        // 현재 위치 가져오기 (기본값: 서울)
+        let lat = 37.5666805;
+        let lng = 126.9784147;
+        
+        // 사용자 위치 가져오기 시도
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              lat = position.coords.latitude;
+              lng = position.coords.longitude;
+              getWeatherInfo(lat, lng);
+            },
+            (error) => {
+              console.error('위치를 가져올 수 없습니다:', error);
+              getWeatherInfo(lat, lng); // 기본 위치 사용
+            }
+          );
+        } else {
+          // 위치 정보를 지원하지 않는 브라우저의 경우
+          getWeatherInfo(lat, lng);
+        }
+      } catch (error) {
+        console.error('날씨 데이터 가져오기 오류:', error);
+        setLoadingWeather(false);
+      }
+    };
+    
+    // 날씨 및 대기질 정보 가져오는 함수
+    const getWeatherInfo = async (lat, lng) => {
+      try {
+        // 날씨 및 대기질 데이터 받기
+        const weather = await getWeatherByLocation(lat, lng);
+        const airQuality = await getAirQualityByLocation(lat, lng);
+        
+        // 운동 추천 생성
+        const recommendation = getExerciseRecommendation(weather, airQuality);
+        
+        // 데이터 가공
+        const weatherIcon = weather.weather ? weather.weather.icon : '01d';
+        
+        // 상태 업데이트
+        setWeatherData({
+          temperature: Math.round(weather.temperature),
+          condition: weather.weather.main || 'Clear',
+          description: weather.weather.description || '맞음',
+          icon: weatherIcon,
+          location: `${weather.location.name}, ${weather.location.country}`,
+          airQuality: `${airQuality.status} (${airQuality.components.pm10})`,
+          recommendation: recommendation.recommendation
+        });
+      } catch (error) {
+        console.error('날씨 정보 가져오기 실패:', error);
+      } finally {
+        setLoadingWeather(false);
+      }
+    };
+    
+    fetchWeatherData();
+  }, []); // 컴포넌트 처음 랜더링시에만 실행
 
   // 최근 활동 데이터 (가상)
   const recentActivities = [
@@ -236,12 +311,27 @@ function Home() {
           {/* 날씨 카드 */}
           <Card sx={{ mb: 4 }}>
             <CardContent>
-              <Typography variant="h6" fontWeight="medium" gutterBottom>
-                오늘의 날씨
-              </Typography>
+              <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                <Typography variant="h6" fontWeight="medium" gutterBottom>
+                  오늘의 날씨
+                </Typography>
+                {loadingWeather && (
+                  <Typography variant="body2" color="text.secondary">
+                    날씨 정보 가져오는 중...
+                  </Typography>
+                )}
+              </Box>
               <Grid container spacing={2} alignItems="center">
                 <Grid item>
-                  <WbSunnyIcon sx={{ fontSize: 40, color: '#f59e0b' }} />
+                  {weatherData.icon ? (
+                    <img 
+                      src={`https://openweathermap.org/img/wn/${weatherData.icon}@2x.png`} 
+                      alt={weatherData.description} 
+                      style={{ width: 50, height: 50 }}
+                    />
+                  ) : (
+                    <WbSunnyIcon sx={{ fontSize: 40, color: '#f59e0b' }} />
+                  )}
                 </Grid>
                 <Grid item xs>
                   <Typography variant="h5" fontWeight="bold">
@@ -289,7 +379,15 @@ function Home() {
                     오늘의 추천 코스
                   </Typography>
                   <Typography variant="body2" paragraph>
-                    한강공원 5km 코스: 날씨가 좋고 대기질이 양호하여 추천합니다.
+                    {loadingWeather ? (
+                      '추천 코스를 가져오는 중...'
+                    ) : (
+                      weatherData.condition === 'Clear' || weatherData.condition === 'sunny' ?
+                      '한강공원 5km 코스: 날씨가 좋고 대기질이 양호하여 추천합니다.' :
+                      weatherData.condition === 'Rain' || weatherData.condition === 'rainy' ?
+                      '실내 트랙 러닝: 오늘은 비가 와서 실내 코스를 추천합니다.' :
+                      '오늘은 ' + weatherData.description + ' 날씨입니다. 적절한 코스를 선택해보세요.'
+                    )}
                   </Typography>
                   <Button size="small" variant="contained" color="primary" component={Link} to="/courses">
                     코스 보기
