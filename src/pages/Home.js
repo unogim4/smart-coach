@@ -70,7 +70,8 @@ function NaverMap() {
     let currentMap = map;
     try {
       console.log('네이버 지도 초기화 시도 (Home)...');
-      if (window.naver && window.naver.maps) {
+      // 지도가 이미 생성되어 있지 않은 경우에만 새로 생성
+      if (!map && window.naver && window.naver.maps) {
         // 지도 생성
         const mapOptions = {
           center: new window.naver.maps.LatLng(userLocation.lat, userLocation.lng),
@@ -130,7 +131,12 @@ function NaverMap() {
             console.error("코스 표시 중 오류:", error);
           }
         }
+      } else if (map) {
+        // 이미 지도가 있는 경우
+        console.log('이미 지도가 생성되어 있습니다. 새로 생성하지 않음');
+        currentMap = map; // 기존 지도 사용
       } else {
+        // 네이버 API가 로드되지 않은 경우
         console.error('네이버 지도 API가 로드되지 않았습니다 (Home)');
       }
     } catch (error) {
@@ -141,7 +147,7 @@ function NaverMap() {
     return () => {
       // 필요한 정리 작업을 여기에 추가
     };
-  }, [userLocation, selectedCourse, map]);
+  }, [userLocation, selectedCourse]); // map 상태는 의존성에서 제거
   
   return (
     <div>
