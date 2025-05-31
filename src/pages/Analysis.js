@@ -1,9 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import WorkoutStats from '../components/WorkoutStats';
 import WorkoutFeedback from '../components/WorkoutFeedback';
+import { useAuth } from '../components/AuthProvider';
+import { saveActivity } from '../services/userService';
+import { useNavigate } from 'react-router-dom';
 
 function Analysis() {
-  // 가상의 운동 데이터 (나중에 API로 대체)
+  const { currentUser } = useAuth();
+  const navigate = useNavigate();
+  
+  // 운동 상태 관리
+  const [isWorkoutActive, setIsWorkoutActive] = useState(false);
+  const [workoutStartTime, setWorkoutStartTime] = useState(null);
+  const [isPaused, setIsPaused] = useState(false);
+  const [showWorkoutTypeModal, setShowWorkoutTypeModal] = useState(false);
+  const [selectedWorkoutType, setSelectedWorkoutType] = useState('런닝');
+  
+  // 운동 데이터
   const [workoutData, setWorkoutData] = useState({
     stats: {
       distance: 5.2,
@@ -39,8 +52,88 @@ function Analysis() {
     5.2, 5.3, 5.4, 5.5, 5.6, 5.5, 5.4, 5.3, 5.4, 5.5, 5.6, 5.7, 5.6, 5.5, 5.5
   ]);
 
-  // 실시간 데이터 시뮬레이션
+  // 운동 타입 선택 모달 표시
+  const handleStartWorkout = () => {
+    if (!currentUser) {
+      alert('로그인이 필요합니다.');
+      navigate('/login');
+      return;
+    }
+    setShowWorkoutTypeModal(true);
+  };
+  
+  // 운동 시작 함수
+  const startWorkout = (type) => {
+    setSelectedWorkoutType(type);
+    setShowWorkoutTypeModal(false);
+    setIsWorkoutActive(true);
+    setWorkoutStartTime(new Date());
+    setIsPaused(false);
+    
+    // 운동 데이터 초기화
+    setWorkoutData(prev => ({
+    ...prev,
+    activityType: type,
+      stats: {
+        distance: 0,
+        avgSpeed: 0,
+        duration: '0분',
+        calories: 0,
+        steps: 0
+      },
+      startTime: new Date().toLocaleTimeString('ko-KR', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      }),
+      elapsedTime: '00:00:00'
+    }));
+  };
+  
+  // 운동 일시정지/재개 함수
+  const togglePause = () => {
+    setIsPaused(!isPaused);
+  };
+  
+  // 운동 종료 및 저장 함수
+  const endWorkout = async () => {
+    if (window.confirm('운동을 종료하고 저장하시겠습니까?')) {
+      try {
+        // 운동 데이터 저장
+        const activityData = {
+          type: selectedWorkoutType,
+          distance: workoutData.stats.distance,
+          duration: workoutData.elapsedTime,
+          avgSpeed: workoutData.stats.avgSpeed,
+          calories: workoutData.stats.calories,
+          steps: workoutData.stats.steps,
+          maxHeartRate: workoutData.maxHeartRate,
+          avgHeartRate: Math.round((workoutData.maxHeartRate + workoutData.targetZone.min) / 2),
+          route: workoutData.route.name,
+          startTime: workoutStartTime,
+          endTime: new Date()
+        };
+        
+        await saveActivity(currentUser.uid, activityData);
+        alert('운동 기록이 저장되었습니다!');
+        
+        // 상태 초기화
+        setIsWorkoutActive(false);
+        setWorkoutStartTime(null);
+        setIsPaused(false);
+        
+        // 프로필 페이지로 이동
+        navigate('/profile');
+      } catch (error) {
+        console.error('운동 저장 오류:', error);
+        alert('운동 기록 저장 중 오류가 발생했습니다.');
+      }
+    }
+  };
+  
+  // 실시간 데이터 시뮬레이션 (운동 중일 때만)
   useEffect(() => {
+    if (!isWorkoutActive || isPaused) return;
+    
     const timer = setInterval(() => {
       // 심박수 랜덤 변화 (140-160 사이)
       const newHeartRate = Math.floor(Math.random() * 20) + 140;
@@ -75,7 +168,27 @@ function Analysis() {
     }, 3000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [isWorkoutActive, isPaused]);
+  
+  // 경과 시간 업데이트
+  useEffect(() => {
+    if (!isWorkoutActive || !workoutStartTime || isPaused) return;
+    
+    const timer = setInterval(() => {
+      const now = new Date();
+      const elapsed = now - workoutStartTime;
+      const hours = Math.floor(elapsed / 3600000);
+      const minutes = Math.floor((elapsed % 3600000) / 60000);
+      const seconds = Math.floor((elapsed % 60000) / 1000);
+      
+      setWorkoutData(prev => ({
+        ...prev,
+        elapsedTime: `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+      }));
+    }, 1000);
+    
+    return () => clearInterval(timer);
+  }, [isWorkoutActive, workoutStartTime, isPaused]);
 
   // 심박 구간 계산
   const getHeartRateZone = (heartRate) => {
@@ -188,12 +301,29 @@ function Analysis() {
               <p className="text-gray-500">시작 시간: {workoutData.startTime} • 경과 시간: {workoutData.elapsedTime}</p>
             </div>
             <div className="mt-4 md:mt-0 flex space-x-3">
-              <button className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition">
-                일시 정지
-              </button>
-              <button className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition">
-                운동 종료
-              </button>
+              {!isWorkoutActive ? (
+                <button 
+                  onClick={handleStartWorkout}
+                  className="px-6 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition"
+                >
+                  운동 시작
+                </button>
+              ) : (
+                <>
+                  <button 
+                    onClick={togglePause}
+                    className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition"
+                  >
+                    {isPaused ? '재개' : '일시 정지'}
+                  </button>
+                  <button 
+                    onClick={endWorkout}
+                    className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition"
+                  >
+                    운동 종료
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
@@ -333,6 +463,51 @@ function Analysis() {
           </div>
         </div>
       </div>
+      
+      {/* 운동 타입 선택 모달 */}
+      {showWorkoutTypeModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-xl font-bold mb-4">운동 타입 선택</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <button
+                onClick={() => startWorkout('런닝')}
+                className="p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition"
+              >
+                <div className="text-3xl mb-2">🏃</div>
+                <div className="font-semibold">런닝</div>
+              </button>
+              <button
+                onClick={() => startWorkout('사이클링')}
+                className="p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition"
+              >
+                <div className="text-3xl mb-2">🚴</div>
+                <div className="font-semibold">사이클링</div>
+              </button>
+              <button
+                onClick={() => startWorkout('걸기')}
+                className="p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition"
+              >
+                <div className="text-3xl mb-2">🚶</div>
+                <div className="font-semibold">걸기</div>
+              </button>
+              <button
+                onClick={() => startWorkout('트레킹')}
+                className="p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition"
+              >
+                <div className="text-3xl mb-2">🥾</div>
+                <div className="font-semibold">트레킹</div>
+              </button>
+            </div>
+            <button
+              onClick={() => setShowWorkoutTypeModal(false)}
+              className="mt-4 w-full bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300 transition"
+            >
+              취소
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

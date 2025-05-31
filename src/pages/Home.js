@@ -19,6 +19,8 @@ import WbSunnyIcon from '@mui/icons-material/WbSunny';
 import AirIcon from '@mui/icons-material/Air';
 import { recommendCourses } from '../services/recommendationService';
 import { getWeatherByLocation, getAirQualityByLocation, getExerciseRecommendation } from '../services/weatherService';
+import { getUserActivities } from '../services/userService';
+import { useAuth } from '../components/AuthProvider';
 
 // 네이버 지도 컴포넌트
 function NaverMap() {
@@ -187,6 +189,8 @@ function NaverMap() {
 }
 
 function Home() {
+  const { currentUser } = useAuth();
+  
   // 날씨 관련 상태
   const [weatherData, setWeatherData] = useState({
     temperature: 23,
@@ -196,6 +200,9 @@ function Home() {
     recommendation: '오늘은 야외 운동하기 좋은 날씨입니다. 자외선 차단제를 바르고 충분한 수분 섭취를 하세요.'
   });
   const [loadingWeather, setLoadingWeather] = useState(false);
+  
+  // 최근 활동 데이터
+  const [recentActivities, setRecentActivities] = useState([]);
   
   // 날씨 데이터 가져오기
   useEffect(() => {
@@ -263,12 +270,28 @@ function Home() {
     fetchWeatherData();
   }, []); // 컴포넌트 처음 랜더링시에만 실행
 
-  // 최근 활동 데이터 (가상)
-  const recentActivities = [
-    { type: '러닝', date: '2025.04.03', distance: 5.2, duration: '30분' },
-    { type: '사이클링', date: '2025.04.01', distance: 15.7, duration: '50분' },
-    { type: '러닝', date: '2025.03.30', distance: 8.3, duration: '45분' }
-  ];
+  // 최근 활동 데이터 가져오기
+  useEffect(() => {
+    const fetchRecentActivities = async () => {
+      if (currentUser) {
+        try {
+          const activities = await getUserActivities(currentUser.uid, 3); // 최근 3개만
+          setRecentActivities(activities.map(activity => ({
+            type: activity.type,
+            date: activity.createdAt?.toDate ? 
+              activity.createdAt.toDate().toLocaleDateString('ko-KR') : 
+              '날짜 없음',
+            distance: activity.distance || 0,
+            duration: activity.duration || '0분'
+          })));
+        } catch (error) {
+          console.error('최근 활동 불러오기 오류:', error);
+        }
+      }
+    };
+    
+    fetchRecentActivities();
+  }, [currentUser]);
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
