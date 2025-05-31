@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 
 function ProfileForm({ initialData, onSave }) {
-  const [formData, setFormData] = useState(initialData || {
-    name: '',
-    email: '',
-    height: '',
-    weight: '',
-    age: '',
-    gender: 'male'
+  const [formData, setFormData] = useState({
+    displayName: initialData?.displayName || '',
+    email: initialData?.email || '',
+    height: initialData?.height || '',
+    weight: initialData?.weight || '',
+    age: initialData?.age || '',
+    gender: initialData?.gender || 'male',
+    fitnessLevel: initialData?.fitnessLevel || 'beginner',
+    goals: initialData?.goals || []
   });
   
   const handleChange = (e) => {
@@ -32,8 +34,8 @@ function ProfileForm({ initialData, onSave }) {
           <label className="block text-gray-500 text-sm mb-1">이름</label>
           <input 
             type="text" 
-            name="name"
-            value={formData.name}
+            name="displayName"
+            value={formData.displayName}
             onChange={handleChange}
             className="w-full border p-2 rounded" 
             placeholder="이름을 입력하세요" 
@@ -101,6 +103,20 @@ function ProfileForm({ initialData, onSave }) {
             <option value="other">기타</option>
           </select>
         </div>
+      </div>
+      
+      <div className="mb-4">
+        <label className="block text-gray-500 text-sm mb-1">운동 수준</label>
+        <select 
+          name="fitnessLevel"
+          value={formData.fitnessLevel}
+          onChange={handleChange}
+          className="w-full border p-2 rounded"
+        >
+          <option value="beginner">초급자</option>
+          <option value="intermediate">중급자</option>
+          <option value="advanced">고급자</option>
+        </select>
       </div>
       
       <button 

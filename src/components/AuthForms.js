@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { auth } from '../firebase';
+import { auth, db } from '../firebase';
 import { 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword,
   signOut 
 } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
 
 function AuthForms() {
   const [isLogin, setIsLogin] = useState(true);
@@ -24,7 +25,23 @@ function AuthForms() {
         await signInWithEmailAndPassword(auth, email, password);
       } else {
         // 회원가입
-        await createUserWithEmailAndPassword(auth, email, password);
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        
+        // 회원가입 성공 시 사용자 프로필 생성
+        const user = userCredential.user;
+        await setDoc(doc(db, 'users', user.uid), {
+          email: user.email,
+          displayName: '',
+          age: '',
+          height: '',
+          weight: '',
+          fitnessLevel: 'beginner',
+          goals: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+        
+        console.log('사용자 프로필이 생성되었습니다!');
       }
       
       // 폼 초기화

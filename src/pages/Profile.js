@@ -22,23 +22,34 @@ function Profile() {
           // 활동 내역 불러오기
           const userActivities = await getUserActivities(currentUser.uid);
           
-          // 활동 요약 데이터 계산
-          const totalDistance = userActivities.reduce((sum, act) => sum + (act.distance || 0), 0);
-          const totalDuration = '계산 필요'; // 복잡한 계산이 필요함
-          const totalCalories = userActivities.reduce((sum, act) => sum + (act.calories || 0), 0);
-          
-          setActivities({
-            totalWorkouts: userActivities.length,
-            totalDistance: totalDistance.toFixed(1),
-            totalDuration,
-            totalCalories: Math.round(totalCalories),
-            recent: userActivities.map(act => ({
-              date: act.createdAt.toDate().toLocaleDateString(),
-              type: act.type,
-              distance: act.distance,
-              duration: act.duration
-            }))
-          });
+          // 활동이 있을 경우만 데이터 처리
+          if (userActivities && userActivities.length > 0) {
+            const totalDistance = userActivities.reduce((sum, act) => sum + (act.distance || 0), 0);
+            const totalDuration = '계산 필요'; // 복잡한 계산이 필요함
+            const totalCalories = userActivities.reduce((sum, act) => sum + (act.calories || 0), 0);
+            
+            setActivities({
+              totalWorkouts: userActivities.length,
+              totalDistance: totalDistance.toFixed(1),
+              totalDuration,
+              totalCalories: Math.round(totalCalories),
+              recent: userActivities.map(act => ({
+                date: act.createdAt?.toDate ? act.createdAt.toDate().toLocaleDateString() : '날짜 없음',
+                type: act.type || '알 수 없음',
+                distance: act.distance || 0,
+                duration: act.duration || '0분'
+              }))
+            });
+          } else {
+            // 활동 내역이 없을 경우 기본값 설정
+            setActivities({
+              totalWorkouts: 0,
+              totalDistance: '0',
+              totalDuration: '0분',
+              totalCalories: 0,
+              recent: []
+            });
+          }
         } catch (error) {
           console.error('데이터 로드 오류:', error);
         } finally {
