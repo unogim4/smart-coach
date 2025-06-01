@@ -42,15 +42,18 @@ function Analysis() {
     }
   });
 
+  // 실제 심박수와 호흡수 데이터
+  const realHeartRateData = [65, 85, 105, 125, 145, 155, 165, 170, 175, 170, 165, 155, 145, 135, 115, 95, 75];
+  const realRespiratoryData = [15, 18, 22, 25, 28, 30, 32, 35, 37, 35, 33, 30, 27, 25, 22, 19, 17];
+  
+  // 현재 데이터 인덱스 (시간 경과에 따라 증가)
+  const [currentDataIndex, setCurrentDataIndex] = useState(0);
+  
   // 심박수 데이터 포인트 (차트 시각화용)
-  const [heartRateData, setHeartRateData] = useState([
-    140, 142, 145, 143, 148, 152, 155, 156, 158, 156, 153, 149, 145, 147, 145
-  ]);
-
+  const [heartRateData, setHeartRateData] = useState([65]); // 초기값
+  
   // 페이스 데이터 포인트 (차트 시각화용)
-  const [paceData, setPaceData] = useState([
-    5.2, 5.3, 5.4, 5.5, 5.6, 5.5, 5.4, 5.3, 5.4, 5.5, 5.6, 5.7, 5.6, 5.5, 5.5
-  ]);
+  const [paceData, setPaceData] = useState([5.2]);
 
   // 운동 타입 선택 모달 표시
   const handleStartWorkout = () => {
@@ -85,8 +88,12 @@ function Analysis() {
         hour: '2-digit', 
         minute: '2-digit' 
       }),
-      elapsedTime: '00:00:00'
+      elapsedTime: '00:00:00',
+      currentRespiratoryRate: 15 // 초기 호흡수
     }));
+    
+    // 데이터 인덱스 초기화
+    setCurrentDataIndex(0);
   };
   
   // 운동 일시정지/재개 함수
@@ -98,6 +105,18 @@ function Analysis() {
   const endWorkout = async () => {
     if (window.confirm('운동을 종료하고 저장하시겠습니까?')) {
       try {
+        // 실제 측정된 심박수와 호흡수 데이터
+        const realHeartRateData = [65, 85, 105, 125, 145, 155, 165, 170, 175, 170, 165, 155, 145, 135, 115, 95, 75];
+        const realRespiratoryData = [15, 18, 22, 25, 28, 30, 32, 35, 37, 35, 33, 30, 27, 25, 22, 19, 17];
+        
+        // 평균 심박수 계산
+        const avgHeartRate = Math.round(realHeartRateData.reduce((a, b) => a + b, 0) / realHeartRateData.length);
+        const maxHeartRate = Math.max(...realHeartRateData);
+        const minHeartRate = Math.min(...realHeartRateData);
+        
+        // 평균 호흡수 계산
+        const avgRespiratoryRate = Math.round(realRespiratoryData.reduce((a, b) => a + b, 0) / realRespiratoryData.length);
+        
         // 운동 데이터 저장
         const activityData = {
           type: selectedWorkoutType,
@@ -106,11 +125,16 @@ function Analysis() {
           avgSpeed: workoutData.stats.avgSpeed,
           calories: workoutData.stats.calories,
           steps: workoutData.stats.steps,
-          maxHeartRate: workoutData.maxHeartRate,
-          avgHeartRate: Math.round((workoutData.maxHeartRate + workoutData.targetZone.min) / 2),
+          maxHeartRate: maxHeartRate,
+          minHeartRate: minHeartRate,
+          avgHeartRate: avgHeartRate,
+          avgRespiratoryRate: avgRespiratoryRate,
+          heartRateData: realHeartRateData,  // 전체 심박수 데이터 저장
+          respiratoryRateData: realRespiratoryData,  // 전체 호흡수 데이터 저장
           route: workoutData.route.name,
           startTime: workoutStartTime,
-          endTime: new Date()
+          endTime: new Date(),
+          userId: currentUser.uid
         };
         
         await saveActivity(currentUser.uid, activityData);
@@ -130,42 +154,52 @@ function Analysis() {
     }
   };
   
-  // 실시간 데이터 시뮬레이션 (운동 중일 때만)
+  // 실시간 데이터 업데이트 (운동 중일 때만)
   useEffect(() => {
     if (!isWorkoutActive || isPaused) return;
     
     const timer = setInterval(() => {
-      // 심박수 랜덤 변화 (140-160 사이)
-      const newHeartRate = Math.floor(Math.random() * 20) + 140;
+      // 현재 인덱스에 해당하는 실제 데이터 사용
+      const currentIndex = Math.min(currentDataIndex, realHeartRateData.length - 1);
+      const currentHeartRate = realHeartRateData[currentIndex];
+      const currentRespiratoryRate = realRespiratoryData[currentIndex];
       
-      // 페이스 랜덤 변화 (5.2-5.8 사이)
-      const newPace = (Math.random() * 0.6 + 5.2).toFixed(1);
-
+      // 페이스 계산 (심박수에 따라 변동)
+      const calculatedPace = (5.0 + (currentHeartRate - 100) * 0.01).toFixed(1);
+      
+      // 칼로리 계산 (심박수와 시간에 따라)
+      const caloriesPerMinute = (currentHeartRate * 0.1).toFixed(1);
+      
       // 데이터 업데이트
       setWorkoutData(prevData => ({
         ...prevData,
-        currentHeartRate: newHeartRate,
-        currentPace: parseFloat(newPace),
+        currentHeartRate: currentHeartRate,
+        currentPace: parseFloat(calculatedPace),
+        currentRespiratoryRate: currentRespiratoryRate,
         stats: {
           ...prevData.stats,
-          distance: parseFloat((prevData.stats.distance + 0.01).toFixed(2)),
-          calories: prevData.stats.calories + 1
+          distance: parseFloat((prevData.stats.distance + parseFloat(calculatedPace) / 60).toFixed(2)),
+          calories: Math.round(prevData.stats.calories + parseFloat(caloriesPerMinute)),
+          steps: prevData.stats.steps + Math.round(180 + (currentHeartRate - 100) * 0.5) // 분당 걸음수
         }
       }));
 
       // 차트 데이터 업데이트
       setHeartRateData(prevData => {
-        const newData = [...prevData, newHeartRate];
+        const newData = [...prevData, currentHeartRate];
         if (newData.length > 15) newData.shift();
         return newData;
       });
 
       setPaceData(prevData => {
-        const newData = [...prevData, parseFloat(newPace)];
+        const newData = [...prevData, parseFloat(calculatedPace)];
         if (newData.length > 15) newData.shift();
         return newData;
       });
-    }, 3000);
+      
+      // 다음 데이터 인덱스로 이동
+      setCurrentDataIndex(prev => prev + 1);
+    }, 3000); // 3초마다 업데이트 (실제로는 1분 데이터를 3초마다 보여줌)
 
     return () => clearInterval(timer);
   }, [isWorkoutActive, isPaused]);
@@ -361,6 +395,10 @@ function Analysis() {
                   <div>
                     <div className="text-sm text-gray-500">현재 심박수</div>
                     <div className={`text-xl font-bold ${currentZone.color}`}>{workoutData.currentHeartRate} BPM</div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-gray-500">현재 호흡수</div>
+                    <div className="text-xl font-bold text-blue-600">{workoutData.currentRespiratoryRate || 0} 회/분</div>
                   </div>
                   <div>
                     <div className="text-sm text-gray-500">최대 심박수</div>

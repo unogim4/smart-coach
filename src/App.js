@@ -8,6 +8,7 @@ import Courses from './pages/Courses';
 import Analysis from './pages/Analysis';
 import Profile from './pages/Profile';
 import Login from './pages/Login';
+import WorkoutDetail from './pages/WorkoutDetail';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 
@@ -39,6 +40,7 @@ function App() {
                 <Route path="/analysis" element={<Analysis />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/login" element={<Login />} />
+                <Route path="/workout/:id" element={<WorkoutDetail />} />
               </Routes>
             </main>
           </div>

@@ -1,6 +1,8 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 
 function ActivitySummary({ activities }) {
+  const navigate = useNavigate();
   return (
     <div className="bg-white p-6 rounded-lg shadow">
       <h3 className="text-xl font-semibold mb-4">활동 요약</h3>
@@ -41,7 +43,11 @@ function ActivitySummary({ activities }) {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {activities.recent.map((activity, index) => (
-                <tr key={index}>
+                <tr 
+                  key={index} 
+                  className="hover:bg-gray-50 cursor-pointer"
+                  onClick={() => activity.id && navigate(`/workout/${activity.id}`)}
+                >
                   <td className="py-2 px-4 whitespace-nowrap">{activity.date}</td>
                   <td className="py-2 px-4 whitespace-nowrap">{activity.type}</td>
                   <td className="py-2 px-4 whitespace-nowrap">{activity.distance} km</td>

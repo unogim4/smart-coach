@@ -34,6 +34,7 @@ function Profile() {
               totalDuration,
               totalCalories: Math.round(totalCalories),
               recent: userActivities.map(act => ({
+                id: act.id,  // ID 추가
                 date: act.createdAt?.toDate ? act.createdAt.toDate().toLocaleDateString() : '날짜 없음',
                 type: act.type || '알 수 없음',
                 distance: act.distance || 0,
