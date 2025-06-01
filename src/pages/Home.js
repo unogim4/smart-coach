@@ -29,6 +29,7 @@ function NaverMap() {
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [courses, setCourses] = useState([]);
   const [map, setMap] = useState(null); // 네이버 지도 객체 저장
+  const [mapError, setMapError] = useState(false); // 지도 오류 상태
   
   useEffect(() => {
     console.log('네이버맵 useEffect 실행:', userLocation, selectedCourse);
@@ -68,82 +69,47 @@ function NaverMap() {
       );
     }
     
+    // 지도 초기화 함수
+    const initializeMap = () => {
+      if (window.naver && window.naver.maps) {
+        try {
+          console.log('네이버 지도 초기화 시도 (Home)...');
+          const mapOptions = {
+            center: new window.naver.maps.LatLng(userLocation.lat, userLocation.lng),
+            zoom: 15,
+            mapTypeControl: true,
+            mapTypeControlOptions: {
+              style: window.naver.maps.MapTypeControlStyle.BUTTON,
+              position: window.naver.maps.Position.TOP_RIGHT
+            }
+          };
+          
+          const newMap = new window.naver.maps.Map(mapRef.current, mapOptions);
+          setMap(newMap);
+          console.log('네이버 지도 생성 성공 (Home)');
+          
+          // 현재 위치 마커 생성
+          new window.naver.maps.Marker({
+            position: new window.naver.maps.LatLng(userLocation.lat, userLocation.lng),
+            map: newMap,
+            title: '현재 위치'
+          });
+          
+          setMapError(false);
+        } catch (error) {
+          console.error('네이버 지도 초기화 오류:', error);
+          setMapError(true);
+        }
+      } else {
+        console.log('네이버 지도 API가 아직 로드되지 않았습니다.');
+        // 1초 후 다시 시도
+        setTimeout(initializeMap, 1000);
+      }
+    };
+    
     // 이미 index.html에 로드된 네이버 지도 API 사용
     let currentMap = map;
-    try {
-      console.log('네이버 지도 초기화 시도 (Home)...');
-      // 지도가 이미 생성되어 있지 않은 경우에만 새로 생성
-      if (!map && window.naver && window.naver.maps) {
-        // 지도 생성
-        const mapOptions = {
-          center: new window.naver.maps.LatLng(userLocation.lat, userLocation.lng),
-          zoom: 15
-        };
-        
-        const newMap = new window.naver.maps.Map(mapRef.current, mapOptions);
-        setMap(newMap); // 상태에 지도 객체 저장
-        currentMap = newMap; // 현재 스코프에서 사용할 지도 객체
-        console.log('네이버 지도 생성 성공 (Home)');
-        
-        // 현재 위치 마커 생성
-        const marker = new window.naver.maps.Marker({
-          position: new window.naver.maps.LatLng(userLocation.lat, userLocation.lng),
-          map: newMap,
-          title: '현재 위치'
-        });
-
-        // 추천 코스가 있으면 지도에 표시
-        if (selectedCourse) {
-          try {
-            // 경로 포인트 생성
-            const path = selectedCourse.pointsOfInterest.map(
-              point => new window.naver.maps.LatLng(point.lat, point.lng)
-            );
-            
-            // 경로 그리기
-            const polyline = new window.naver.maps.Polyline({
-              map: newMap, // 방금 생성한 지도 객체 사용
-              path: path,
-              strokeColor: '#5347AA',
-              strokeWeight: 5,
-              strokeOpacity: 0.8
-            });
-            
-            // 코스 시작점 마커
-            const startMarker = new window.naver.maps.Marker({
-              position: new window.naver.maps.LatLng(
-                selectedCourse.startLocation.lat, 
-                selectedCourse.startLocation.lng
-              ),
-              map: newMap, // 방금 생성한 지도 객체 사용
-              title: `${selectedCourse.name} 시작점`,
-              icon: {
-                content: '<div style="padding: 5px; background-color: green; color: white; border-radius: 3px;">시작</div>',
-                anchor: new window.naver.maps.Point(20, 10)
-              }
-            });
-            
-            // 모든 경로가 보이도록 지도 경계 조정
-            const bounds = new window.naver.maps.LatLngBounds();
-            path.forEach(point => bounds.extend(point));
-            bounds.extend(new window.naver.maps.LatLng(userLocation.lat, userLocation.lng));
-            // 새로 생성한 지도 객체에 bounds 적용
-            newMap.fitBounds(bounds);
-          } catch (error) {
-            console.error("코스 표시 중 오류:", error);
-          }
-        }
-      } else if (map) {
-        // 이미 지도가 있는 경우
-        console.log('이미 지도가 생성되어 있습니다. 새로 생성하지 않음');
-        currentMap = map; // 기존 지도 사용
-      } else {
-        // 네이버 API가 로드되지 않은 경우
-        console.error('네이버 지도 API가 로드되지 않았습니다 (Home)');
-      }
-    } catch (error) {
-      console.error('네이버 지도 초기화 오류 (Home):', error);
-    }
+    initializeMap();
     
     // 컴포넌트 언마운트 시 실행할 작업
     return () => {
@@ -153,14 +119,34 @@ function NaverMap() {
   
   return (
     <div>
-      <div 
-        ref={mapRef} 
-        style={{ 
+      {mapError ? (
+        <div style={{ 
           width: '100%', 
           height: '300px', 
-          borderRadius: '8px'
-        }}
-      ></div>
+          borderRadius: '8px',
+          backgroundColor: '#f5f5f5',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexDirection: 'column'
+        }}>
+          <Typography variant="body1" color="text.secondary" gutterBottom>
+            지도를 로드할 수 없습니다.
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            네이버 지도 API 키를 확인해주세요.
+          </Typography>
+        </div>
+      ) : (
+        <div 
+          ref={mapRef} 
+          style={{ 
+            width: '100%', 
+            height: '300px', 
+            borderRadius: '8px'
+          }}
+        ></div>
+      )}
       
       {selectedCourse && (
         <Box sx={{ mt: 2 }}>
