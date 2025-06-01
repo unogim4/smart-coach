@@ -4,6 +4,7 @@ import WorkoutFeedback from '../components/WorkoutFeedback';
 import { useAuth } from '../components/AuthProvider';
 import { saveActivity } from '../services/userService';
 import { useNavigate } from 'react-router-dom';
+import WorkoutDataUpload from '../components/WorkoutDataUpload';
 
 function Analysis() {
   const { currentUser } = useAuth();
@@ -42,9 +43,12 @@ function Analysis() {
     }
   });
 
-  // 실제 심박수와 호흡수 데이터
-  const realHeartRateData = [65, 85, 105, 125, 145, 155, 165, 170, 175, 170, 165, 155, 145, 135, 115, 95, 75];
-  const realRespiratoryData = [15, 18, 22, 25, 28, 30, 32, 35, 37, 35, 33, 30, 27, 25, 22, 19, 17];
+  // 실제 심박수와 호흡수 데이터 (기본값 또는 업로드된 데이터)
+  const [realHeartRateData, setRealHeartRateData] = useState([65, 85, 105, 125, 145, 155, 165, 170, 175, 170, 165, 155, 145, 135, 115, 95, 75]);
+  const [realRespiratoryData, setRealRespiratoryData] = useState([15, 18, 22, 25, 28, 30, 32, 35, 37, 35, 33, 30, 27, 25, 22, 19, 17]);
+  
+  // 파일 업로드 모달 상태
+  const [showUploadModal, setShowUploadModal] = useState(false);
   
   // 현재 데이터 인덱스 (시간 경과에 따라 증가)
   const [currentDataIndex, setCurrentDataIndex] = useState(0);
@@ -224,6 +228,14 @@ function Analysis() {
     return () => clearInterval(timer);
   }, [isWorkoutActive, workoutStartTime, isPaused]);
 
+  // 업로드된 데이터 처리
+  const handleDataLoaded = (data) => {
+    setRealHeartRateData(data.heartRateData);
+    setRealRespiratoryData(data.respiratoryRateData);
+    setShowUploadModal(false);
+    alert('운동 데이터가 로드되었습니다. 운동을 시작해주세요!');
+  };
+  
   // 심박 구간 계산
   const getHeartRateZone = (heartRate) => {
     if (heartRate < workoutData.targetZone.min) {
@@ -336,12 +348,20 @@ function Analysis() {
             </div>
             <div className="mt-4 md:mt-0 flex space-x-3">
               {!isWorkoutActive ? (
-                <button 
-                  onClick={handleStartWorkout}
-                  className="px-6 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition"
-                >
-                  운동 시작
-                </button>
+                <>
+                  <button 
+                    onClick={handleStartWorkout}
+                    className="px-6 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition"
+                  >
+                    운동 시작
+                  </button>
+                  <button 
+                    onClick={() => setShowUploadModal(true)}
+                    className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition"
+                  >
+                    데이터 업로드
+                  </button>
+                </>
               ) : (
                 <>
                   <button 
@@ -539,6 +559,22 @@ function Analysis() {
             </div>
             <button
               onClick={() => setShowWorkoutTypeModal(false)}
+              className="mt-4 w-full bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300 transition"
+            >
+              취소
+            </button>
+          </div>
+        </div>
+      )}
+      
+      {/* 데이터 업로드 모달 */}
+      {showUploadModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-xl font-bold mb-4">운동 데이터 업로드</h3>
+            <WorkoutDataUpload onDataLoaded={handleDataLoaded} />
+            <button
+              onClick={() => setShowUploadModal(false)}
               className="mt-4 w-full bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300 transition"
             >
               취소

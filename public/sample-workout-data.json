@@ -1,0 +1,10 @@
+{
+  "heartRateData": [65, 85, 105, 125, 145, 155, 165, 170, 175, 170, 165, 155, 145, 135, 115, 95, 75],
+  "respiratoryRateData": [15, 18, 22, 25, 28, 30, 32, 35, 37, 35, 33, 30, 27, 25, 22, 19, 17],
+  "metadata": {
+    "date": "2025-06-01",
+    "duration": "17 minutes",
+    "type": "running",
+    "description": "Morning run with interval training"
+  }
+}

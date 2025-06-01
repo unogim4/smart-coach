@@ -4,6 +4,19 @@ import ProfileForm from '../components/ProfileForm';
 import ActivitySummary from '../components/ActivitySummary';
 import { useAuth } from '../components/AuthProvider';
 import { getUserProfile, saveUserProfile, getUserActivities } from '../services/userService';
+import { 
+  Container, 
+  Grid, 
+  Paper, 
+  Typography, 
+  Box,
+  LinearProgress,
+  Chip
+} from '@mui/material';
+import DirectionsRunIcon from '@mui/icons-material/DirectionsRun';
+import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
+import TimerIcon from '@mui/icons-material/Timer';
+import FavoriteIcon from '@mui/icons-material/Favorite';
 
 function Profile() {
   const { currentUser, isAuthenticated } = useAuth();
@@ -86,20 +99,76 @@ function Profile() {
   }
 
   return (
-    <div>
-      <h2 className="text-2xl font-bold mb-6">프로필</h2>
+    <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Typography variant="h4" component="h1" gutterBottom>
+        내 프로필
+      </Typography>
       
-      <div className="grid grid-cols-1 gap-6">
-        <ProfileForm 
-          initialData={userData} 
-          onSave={handleProfileSave} 
-        />
+      {/* 운동 통계 개요 */}
+      {activities && (
+        <Grid container spacing={3} sx={{ mb: 4 }}>
+          <Grid item xs={12} sm={6} md={3}>
+            <Paper elevation={2} sx={{ p: 3, textAlign: 'center', bgcolor: '#fee2e2' }}>
+              <DirectionsRunIcon sx={{ fontSize: 40, color: '#ef4444', mb: 1 }} />
+              <Typography variant="h4" sx={{ color: '#ef4444', fontWeight: 'bold' }}>
+                {activities.totalWorkouts}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                총 운동 횟수
+              </Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Paper elevation={2} sx={{ p: 3, textAlign: 'center', bgcolor: '#d1fae5' }}>
+              <DirectionsRunIcon sx={{ fontSize: 40, color: '#10b981', mb: 1 }} />
+              <Typography variant="h4" sx={{ color: '#10b981', fontWeight: 'bold' }}>
+                {activities.totalDistance} km
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                총 거리
+              </Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Paper elevation={2} sx={{ p: 3, textAlign: 'center', bgcolor: '#e0e7ff' }}>
+              <TimerIcon sx={{ fontSize: 40, color: '#6366f1', mb: 1 }} />
+              <Typography variant="h4" sx={{ color: '#6366f1', fontWeight: 'bold' }}>
+                {activities.totalDuration}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                총 시간
+              </Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Paper elevation={2} sx={{ p: 3, textAlign: 'center', bgcolor: '#fef3c7' }}>
+              <LocalFireDepartmentIcon sx={{ fontSize: 40, color: '#f59e0b', mb: 1 }} />
+              <Typography variant="h4" sx={{ color: '#f59e0b', fontWeight: 'bold' }}>
+                {activities.totalCalories} kcal
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                총 칼로리
+              </Typography>
+            </Paper>
+          </Grid>
+        </Grid>
+      )}
+      
+      <Grid container spacing={3}>
+        <Grid item xs={12} md={6}>
+          <ProfileForm 
+            initialData={userData} 
+            onSave={handleProfileSave} 
+          />
+        </Grid>
         
-        {activities && (
-          <ActivitySummary activities={activities} />
-        )}
-      </div>
-    </div>
+        <Grid item xs={12} md={6}>
+          {activities && (
+            <ActivitySummary activities={activities} />
+          )}
+        </Grid>
+      </Grid>
+    </Container>
   );
 }
 
