@@ -373,6 +373,7 @@ function Home() {
           </Card>
 
           {/* 네이버 지도 추가 - 개선된 추천 코스 기능으로 수정 */}
+          {/* 지도 API 문제로 임시 주석 처리
           <Card sx={{ mb: 4 }}>
             <CardContent>
               <Typography variant="h6" fontWeight="medium" gutterBottom>
@@ -384,6 +385,7 @@ function Home() {
               </Typography>
             </CardContent>
           </Card>
+          */}
 
           {/* 추천 & 목표 카드 그리드 */}
           <Grid container spacing={3} sx={{ mb: 4 }}>
