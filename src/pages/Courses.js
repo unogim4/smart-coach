@@ -1,48 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import CourseSelector from '../components/CourseSelector';
 import CourseCard from '../components/CourseCard';
+import SimpleGoogleMap from '../components/SimpleGoogleMap';
 import { getCourses } from '../services/courseService';
-
-// 네이버 지도 컴포넌트
-function NaverMap() {
-  const mapRef = React.useRef(null);
-  
-  useEffect(() => {
-    // 네이버 지도 스크립트 로드
-    const script = document.createElement('script');
-    script.src = `https://openapi.map.naver.com/openapi/v3/maps.js?ncpClientId=f3clw1exyg`;
-    script.async = true;
-    
-    script.onload = () => {
-      // 스크립트 로드 완료 후 지도 생성
-      const mapOptions = {
-        center: new window.naver.maps.LatLng(37.5666805, 126.9784147),
-        zoom: 14
-      };
-      
-      const map = new window.naver.maps.Map(mapRef.current, mapOptions);
-      
-      // 마커 생성
-      const marker = new window.naver.maps.Marker({
-        position: new window.naver.maps.LatLng(37.5666805, 126.9784147),
-        map: map
-      });
-    };
-    
-    document.head.appendChild(script);
-    
-    // 컴포넌트 언마운트 시 스크립트 제거
-    return () => {
-      if (document.head.contains(script)) {
-        document.head.removeChild(script);
-      }
-    };
-  }, []);
-  
-  return (
-    <div ref={mapRef} style={{ width: '100%', height: '400px', borderRadius: '8px' }}></div>
-  );
-}
 
 // 날씨 컴포넌트
 function WeatherWidget() {
@@ -129,7 +89,8 @@ function Courses() {
       estimatedTime: '30-40분',
       roadType: '포장도로',
       terrain: '평지',
-      imageUrl: 'https://via.placeholder.com/400x200?text=한강+러닝'
+      imageUrl: 'https://via.placeholder.com/400x200?text=한강+러닝',
+      coordinates: { lat: 37.5326, lng: 126.9906 }
     },
     {
       id: '2',
@@ -141,7 +102,8 @@ function Courses() {
       estimatedTime: '50-60분',
       roadType: '산책로/포장도로',
       terrain: '언덕',
-      imageUrl: 'https://via.placeholder.com/400x200?text=남산+코스'
+      imageUrl: 'https://via.placeholder.com/400x200?text=남산+코스',
+      coordinates: { lat: 37.5505, lng: 126.9908 }
     },
     {
       id: '3',
@@ -153,7 +115,8 @@ function Courses() {
       estimatedTime: '1시간 30분',
       roadType: '비포장/등산로',
       terrain: '산악',
-      imageUrl: 'https://via.placeholder.com/400x200?text=북한산+트레일'
+      imageUrl: 'https://via.placeholder.com/400x200?text=북한산+트레일',
+      coordinates: { lat: 37.6358, lng: 126.9782 }
     }
   ];
 
@@ -176,7 +139,12 @@ function Courses() {
         </div>
       </div>
       
-      <div className="container mx-auto px-4 -mt-6">
+      <div className="container mx-auto px-4 py-8">
+        {/* 구글 맵 테스트 (단순 버전) */}
+        <div className="mb-8">
+          <SimpleGoogleMap />
+        </div>
+        
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* 왼쪽: 필터 및 날씨 */}
           <div>
@@ -187,19 +155,8 @@ function Courses() {
             <CourseSelector onFilter={handleFilterChange} />
           </div>
           
-          {/* 오른쪽: 지도 및 코스 */}
+          {/* 오른쪽: 코스 */}
           <div className="md:col-span-2">
-            {/* 지도 */}
-            <div className="bg-white rounded-lg shadow-md overflow-hidden mb-6">
-              <div className="p-4 border-b">
-                <h2 className="text-xl font-bold text-gray-800">코스 지도</h2>
-                <p className="text-gray-500 text-sm">현재 선택된 위치 주변의 추천 코스</p>
-              </div>
-              <div className="p-4">
-                <NaverMap />
-              </div>
-            </div>
-            
             {/* 추천 코스 */}
             <div className="bg-white rounded-lg shadow-md p-4 mb-6">
               <div className="flex justify-between items-center mb-4">
