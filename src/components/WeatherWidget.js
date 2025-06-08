@@ -1,76 +1,120 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { getWeatherInfo } from '../services/realWeatherService';
 
-function WeatherWidget({ weather }) {
-  // 날씨 아이콘 선택 함수
-  const getWeatherIcon = (condition) => {
-    switch(condition) {
-      case 'sunny':
-        return (
-          <svg className="h-10 w-10 text-yellow-500" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
-          </svg>
-        );
-      case 'cloudy':
-        return (
-          <svg className="h-10 w-10 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M5.5 16a3.5 3.5 0 01-.369-6.98 4 4 0 117.753-1.977A4.5 4.5 0 1113.5 16h-8z" />
-          </svg>
-        );
-      case 'rainy':
-        return (
-          <svg className="h-10 w-10 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M5.5 16a3.5 3.5 0 01-.369-6.98 4 4 0 117.753-1.977A4.5 4.5 0 1113.5 16h-8zm9.53-7.376a.75.75 0 00-1.06-1.06l-2.505 2.505-1.5-1.5a.75.75 0 00-1.06 1.06l1.97 1.97a.75.75 0 001.06 0l2.975-2.975z" clipRule="evenodd" />
-          </svg>
-        );
-      default:
-        return (
-          <svg className="h-10 w-10 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M10 2a8 8 0 100 16 8 8 0 000-16zm0 14a6 6 0 110-12 6 6 0 010 12z" clipRule="evenodd" />
-          </svg>
-        );
-    }
+function WeatherWidget({ location }) {
+  const [weather, setWeather] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchWeather = async () => {
+      if (location) {
+        try {
+          const weatherData = await getWeatherInfo(location.lat, location.lng);
+          setWeather(weatherData);
+        } catch (error) {
+          console.error('날씨 정보 로드 실패:', error);
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchWeather();
+    // 5분마다 날씨 정보 업데이트
+    const interval = setInterval(fetchWeather, 5 * 60 * 1000);
+    
+    return () => clearInterval(interval);
+  }, [location]);
+
+  if (loading) {
+    return (
+      <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg p-4 mb-6 animate-pulse">
+        <div className="h-20 bg-blue-400 rounded"></div>
+      </div>
+    );
+  }
+
+  const getWeatherIcon = (sky) => {
+    const icons = {
+      '맑음': '☀️',
+      '구름조금': '🌤️',
+      '구름많음': '⛅',
+      '흐림': '☁️',
+      '비': '🌧️',
+      '눈': '❄️',
+      '소나기': '🌦️'
+    };
+    return icons[sky] || '☀️';
   };
-  
-  // 대기질 수준에 따른 색상 설정
-  const getAirQualityColor = (level) => {
-    switch(level) {
-      case 'good':
-        return 'text-green-500';
-      case 'moderate':
-        return 'text-yellow-500';
-      case 'unhealthy':
-        return 'text-orange-500';
-      case 'very-unhealthy':
-        return 'text-red-500';
-      default:
-        return 'text-gray-500';
-    }
+
+  const getAirQualityColor = (grade) => {
+    const colors = {
+      '좋음': 'text-green-400',
+      '보통': 'text-yellow-400',
+      '나쁨': 'text-orange-400',
+      '매우나쁨': 'text-red-400'
+    };
+    return colors[grade] || 'text-gray-400';
   };
-  
+
   return (
-    <div className="bg-white p-4 rounded-lg shadow">
-      <h3 className="text-lg font-semibold mb-3">오늘의 날씨</h3>
-      
-      <div className="flex items-center justify-between">
-        <div className="flex items-center">
-          {getWeatherIcon(weather.condition)}
-          <div className="ml-3">
-            <div className="text-3xl font-bold">{weather.temperature}°C</div>
-            <div className="text-gray-500">{weather.location}</div>
-          </div>
+    <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg p-4 mb-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h3 className="font-bold text-lg mb-1">오늘의 날씨</h3>
+          <p className="text-blue-100">현재 위치</p>
         </div>
-        
         <div className="text-right">
-          <div className="text-sm">대기질</div>
-          <div className={`font-semibold ${getAirQualityColor(weather.airQuality.level)}`}>
-            {weather.airQuality.value} ({weather.airQuality.description})
+          <div className="flex items-center justify-end">
+            <span className="text-4xl mr-2">{getWeatherIcon(weather?.sky)}</span>
+            <div className="text-3xl font-bold">{weather?.temperature}°C</div>
           </div>
+          <div className="text-blue-100">{weather?.sky}</div>
         </div>
       </div>
       
-      <div className="mt-4 pt-4 border-t text-sm text-gray-500">
-        {weather.recommendation}
+      <div className="mt-4 grid grid-cols-4 gap-2">
+        <div className="bg-white bg-opacity-20 rounded p-2 text-center">
+          <div className="text-xs">습도</div>
+          <div className="font-bold">{weather?.humidity}%</div>
+        </div>
+        <div className="bg-white bg-opacity-20 rounded p-2 text-center">
+          <div className="text-xs">바람</div>
+          <div className="font-bold">{weather?.windSpeed} m/s</div>
+        </div>
+        <div className="bg-white bg-opacity-20 rounded p-2 text-center">
+          <div className="text-xs">미세먼지</div>
+          <div className="font-bold">{weather?.pm10 || '-'}</div>
+        </div>
+        <div className="bg-white bg-opacity-20 rounded p-2 text-center">
+          <div className="text-xs">대기질</div>
+          <div className={`font-bold ${getAirQualityColor(weather?.airQuality)}`}>
+            {weather?.airQuality}
+          </div>
+        </div>
       </div>
+
+      {/* 운동 추천 */}
+      {weather?.recommendation && (
+        <div className={`mt-4 p-3 rounded-lg ${
+          weather.recommendation.status === 'good' ? 'bg-green-500 bg-opacity-20' :
+          weather.recommendation.status === 'caution' ? 'bg-yellow-500 bg-opacity-20' :
+          'bg-red-500 bg-opacity-20'
+        }`}>
+          <div className="font-medium text-sm">
+            {weather.recommendation.status === 'good' ? '🏃‍♂️' : 
+             weather.recommendation.status === 'caution' ? '⚠️' : '🏠'} 
+            {weather.recommendation.message}
+          </div>
+          {weather.recommendation.warnings.length > 0 && (
+            <ul className="text-xs mt-1 space-y-1">
+              {weather.recommendation.warnings.map((warning, index) => (
+                <li key={index}>• {warning}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 }

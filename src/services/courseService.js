@@ -7,6 +7,53 @@ import {
   where, 
   orderBy 
 } from 'firebase/firestore';
+import { getWeatherInfo } from './realWeatherService';
+
+// Google Directions Service 초기화
+let directionsService = null;
+
+// Google Maps가 로드되었을 때 DirectionsService 초기화
+if (window.google && window.google.maps) {
+  directionsService = new window.google.maps.DirectionsService();
+}
+
+// 실제 도로를 따라가는 경로 계산 함수
+const calculateRealRoute = async (startPoint, endPoint, waypoints = []) => {
+  return new Promise((resolve, reject) => {
+    if (!directionsService) {
+      reject(new Error('Directions Service가 초기화되지 않았습니다.'));
+      return;
+    }
+
+    const request = {
+      origin: startPoint,
+      destination: endPoint,
+      waypoints: waypoints.map(point => ({
+        location: point,
+        stopover: false
+      })),
+      travelMode: window.google.maps.TravelMode.WALKING, // 러닝용
+      unitSystem: window.google.maps.UnitSystem.METRIC,
+      avoidHighways: true,
+      avoidTolls: true
+    };
+
+    directionsService.route(request, (result, status) => {
+      if (status === 'OK') {
+        resolve(result);
+      } else {
+        reject(new Error(`경로 계산 실패: ${status}`));
+      }
+    });
+  });
+};
+
+// DirectionsService 초기화 함수 (Google Maps 로드 후 호출)
+export const initializeDirectionsService = () => {
+  if (window.google && window.google.maps && !directionsService) {
+    directionsService = new window.google.maps.DirectionsService();
+  }
+};
 
 // 예시 데이터
 const exampleCourses = [
@@ -151,5 +198,218 @@ export const getCourses = async (filters = {}) => {
   } catch (error) {
     console.error('코스 가져오기 오류:', error);
     throw error;
+  }
+};
+
+// 실제 도로 기반 러닝 코스 생성
+export const generateRunningCourse = async (startLocation, distance, difficulty = 'beginner') => {
+  try {
+    // 난이도별 설정
+    const difficultySettings = {
+      beginner: {
+        maxElevation: 50,
+        preferredTerrain: ['평지', '공원'],
+        avoidHills: true
+      },
+      intermediate: {
+        maxElevation: 150,
+        preferredTerrain: ['언덕', '공원', '강변'],
+        avoidHills: false
+      },
+      advanced: {
+        maxElevation: 300,
+        preferredTerrain: ['산', '언덕', '트레일'],
+        avoidHills: false
+      }
+    };
+
+    const settings = difficultySettings[difficulty];
+
+    // 목적지 계산 (반경 내에서 랜덤하게 선택)
+    const endLocation = calculateEndPoint(startLocation, distance / 2); // 왕복 거리 고려
+
+    // 실제 도로를 따라가는 경로 계산
+    const routeResult = await calculateRealRoute(startLocation, endLocation);
+    
+    if (routeResult && routeResult.routes && routeResult.routes.length > 0) {
+      const route = routeResult.routes[0];
+      const routePath = [];
+      
+      // 경로의 모든 포인트 추출
+      route.legs.forEach(leg => {
+        leg.steps.forEach(step => {
+          step.path.forEach(point => {
+            routePath.push({
+              lat: point.lat(),
+              lng: point.lng()
+            });
+          });
+        });
+      });
+
+      // 코스 정보 생성
+      const courseInfo = {
+        name: `${difficulty === 'beginner' ? '초급' : difficulty === 'intermediate' ? '중급' : '고급'} 러닝 코스`,
+        difficulty: difficulty,
+        distance: route.legs[0].distance.value / 1000, // km로 변환
+        duration: route.legs[0].duration.text,
+        elevation: calculateElevation(routePath),
+        path: routePath,
+        startAddress: route.legs[0].start_address,
+        endAddress: route.legs[0].end_address,
+        polyline: route.overview_polyline,
+        bounds: route.bounds
+      };
+
+      return courseInfo;
+    }
+  } catch (error) {
+    console.error('러닝 코스 생성 오류:', error);
+    throw error;
+  }
+};
+
+// 종점 계산 함수 (시작점에서 일정 거리 떨어진 랜덤 포인트)
+const calculateEndPoint = (start, distanceKm) => {
+  const R = 6371; // 지구 반경 (km)
+  const bearing = Math.random() * 2 * Math.PI; // 랜덤 방향
+  
+  const lat1 = start.lat * Math.PI / 180;
+  const lon1 = start.lng * Math.PI / 180;
+  
+  const lat2 = Math.asin(
+    Math.sin(lat1) * Math.cos(distanceKm / R) +
+    Math.cos(lat1) * Math.sin(distanceKm / R) * Math.cos(bearing)
+  );
+  
+  const lon2 = lon1 + Math.atan2(
+    Math.sin(bearing) * Math.sin(distanceKm / R) * Math.cos(lat1),
+    Math.cos(distanceKm / R) - Math.sin(lat1) * Math.sin(lat2)
+  );
+  
+  return {
+    lat: lat2 * 180 / Math.PI,
+    lng: lon2 * 180 / Math.PI
+  };
+};
+
+// 고도 변화 계산 (실제로는 Elevation API를 사용해야 하지만, 여기서는 간단히 추정)
+const calculateElevation = (path) => {
+  // 실제 구현시에는 Google Elevation API 사용
+  // 여기서는 예시값 반환
+  return Math.floor(Math.random() * 100) + 10;
+};
+
+// 저장된 경로를 지도에 표시하기 위한 디코딩 함수
+export const decodePath = (encodedPath) => {
+  if (window.google && window.google.maps && window.google.maps.geometry) {
+    return window.google.maps.geometry.encoding.decodePath(encodedPath);
+  }
+  return [];
+};
+
+// 근처의 달리기 좋은 장소 찾기 (공원, 강변, 호수 등)
+export const findNearbyRunningSpots = async (userLocation, radius = 1000) => {
+  return new Promise((resolve, reject) => {
+    if (!window.google || !window.google.maps) {
+      reject(new Error('Google Maps가 로드되지 않았습니다.'));
+      return;
+    }
+
+    const service = new window.google.maps.places.PlacesService(
+      document.createElement('div')
+    );
+
+    const request = {
+      location: userLocation,
+      radius: radius,
+      type: ['park'],
+      keyword: '공원 OR 강변 OR 호수 OR 산책로 OR 둘레길'
+    };
+
+    service.nearbySearch(request, (results, status) => {
+      if (status === window.google.maps.places.PlacesServiceStatus.OK) {
+        // 달리기에 적합한 장소 필터링
+        const runningSpots = results.filter(place => {
+          const name = place.name.toLowerCase();
+          return name.includes('공원') || 
+                 name.includes('강') || 
+                 name.includes('호수') || 
+                 name.includes('산책') ||
+                 name.includes('둘레길') ||
+                 place.types.includes('park');
+        });
+        resolve(runningSpots);
+      } else {
+        reject(new Error(`장소 검색 실패: ${status}`));
+      }
+    });
+  });
+};
+
+// 사용자 위치 기반 실제 러닝 코스 생성
+export const generateRealCourses = async (userLocation) => {
+  try {
+    // 근처 달리기 좋은 장소 찾기
+    const nearbySpots = await findNearbyRunningSpots(userLocation, 1000);
+    
+    if (nearbySpots.length === 0) {
+      // 달리기 좋은 장소가 없으면 현재 위치에서 시작
+      nearbySpots.push({
+        name: '현재 위치',
+        geometry: { location: userLocation }
+      });
+    }
+
+    // 3개의 서로 다른 코스 생성
+    const courses = [];
+    const difficulties = ['beginner', 'intermediate', 'advanced'];
+    const distances = [3, 5, 8];
+    const courseNames = [
+      { name: '가벼운 조깅 코스', desc: '짧고 평탄한 초보자용 코스' },
+      { name: '활력 러닝 코스', desc: '적당한 거리의 중급자용 코스' },
+      { name: '체력 단련 코스', desc: '도전적인 거리의 상급자용 코스' }
+    ];
+
+    for (let i = 0; i < 3; i++) {
+      // 시작 지점 선택 (다양한 장소에서 시작)
+      const startSpot = nearbySpots[i % nearbySpots.length];
+      const startLocation = {
+        lat: startSpot.geometry.location.lat(),
+        lng: startSpot.geometry.location.lng()
+      };
+
+      try {
+        const course = await generateRunningCourse(
+          startLocation,
+          distances[i],
+          difficulties[i]
+        );
+
+        if (course) {
+          courses.push({
+            ...course,
+            id: `real-${i + 1}`,
+            name: courseNames[i].name,
+            description: `${startSpot.name} 근처에서 시작하는 ${courseNames[i].desc}`,
+            startingPoint: startSpot.name,
+            imageUrl: `https://via.placeholder.com/400x200?text=${encodeURIComponent(courseNames[i].name)}`,
+            weather: {
+              status: '맑음',
+              temperature: '22°C',
+              airQuality: '좋음'
+            }
+          });
+        }
+      } catch (error) {
+        console.error(`코스 ${i + 1} 생성 실패:`, error);
+      }
+    }
+
+    return courses;
+  } catch (error) {
+    console.error('실제 코스 생성 실패:', error);
+    // 실패 시 기존 예시 데이터 반환
+    return exampleCourses;
   }
 };
