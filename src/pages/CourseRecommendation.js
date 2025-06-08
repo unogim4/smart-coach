@@ -17,8 +17,11 @@ function CourseRecommendation({ userLocation, weatherData }) {
     courseType: 'all'
   });
   const [showRoute, setShowRoute] = useState(false);
+  const [isTrackingLocation, setIsTrackingLocation] = useState(false);
+  const [locationHistory, setLocationHistory] = useState([]);
+  const [watchId, setWatchId] = useState(null);
 
-  // 위치 정보 및 코스 검색
+  // 위치 변화 감지 및 자동 업데이트
   useEffect(() => {
     const loadCourses = async () => {
       setLoading(true);
@@ -27,12 +30,17 @@ function CourseRecommendation({ userLocation, weatherData }) {
         const location = userLocation || await getCurrentLocation();
         setCurrentLocation(location);
 
+        // 위치 히스토리에 추가
+        setLocationHistory(prev => {
+          const newHistory = [...prev, { ...location, timestamp: Date.now() }];
+          return newHistory.slice(-10); // 최근 10개 위치만 유지
+        });
+
         // 주변 러닝 코스 검색
         const nearbyCourses = await searchNearbyRunningCourses(location, filters.maxDistance);
         setCourses(nearbyCourses);
       } catch (error) {
         console.error('코스 로딩 실패:', error);
-        // 에러 시 빈 배열 설정
         setCourses([]);
       } finally {
         setLoading(false);
@@ -41,6 +49,117 @@ function CourseRecommendation({ userLocation, weatherData }) {
 
     loadCourses();
   }, [userLocation, filters.maxDistance]);
+
+  // 실시간 위치 추적 시작/중지
+  const toggleLocationTracking = () => {
+    if (isTrackingLocation) {
+      // 위치 추적 중지
+      if (watchId) {
+        navigator.geolocation.clearWatch(watchId);
+        setWatchId(null);
+      }
+      setIsTrackingLocation(false);
+    } else {
+      // 위치 추적 시작
+      if (navigator.geolocation) {
+        const id = navigator.geolocation.watchPosition(
+          (position) => {
+            const newLocation = {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude
+            };
+            
+            // 이전 위치와 비교해서 유의미한 변화가 있을 때만 업데이트
+            if (currentLocation) {
+              const distance = calculateDistance(currentLocation, newLocation);
+              if (distance > 50) { // 50m 이상 이동했을 때만 업데이트
+                console.log(`위치 변경 감지: ${distance.toFixed(0)}m 이동`);
+                setCurrentLocation(newLocation);
+                
+                // 새 위치 기반으로 코스 재검색
+                refreshCoursesForLocation(newLocation);
+              }
+            } else {
+              setCurrentLocation(newLocation);
+              refreshCoursesForLocation(newLocation);
+            }
+          },
+          (error) => {
+            console.warn('위치 추적 에러:', error);
+            // 에러가 발생해도 추적 계속 시도
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 30000 // 30초
+          }
+        );
+        
+        setWatchId(id);
+        setIsTrackingLocation(true);
+      }
+    }
+  };
+
+  // 새 위치에서 코스 재검색
+  const refreshCoursesForLocation = async (location) => {
+    try {
+      setLoading(true);
+      const nearbyCourses = await searchNearbyRunningCourses(location, filters.maxDistance);
+      setCourses(nearbyCourses);
+      setSelectedCourse(null); // 선택된 코스 초기화
+      
+      // 위치 히스토리 업데이트
+      setLocationHistory(prev => {
+        const newHistory = [...prev, { ...location, timestamp: Date.now() }];
+        return newHistory.slice(-10);
+      });
+      
+      console.log(`새 위치에서 ${nearbyCourses.length}개 코스 발견`);
+    } catch (error) {
+      console.error('코스 재검색 실패:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 거리 계산 함수
+  const calculateDistance = (point1, point2) => {
+    const R = 6371e3; // 지구 반지름 (미터)
+    const φ1 = point1.lat * Math.PI / 180;
+    const φ2 = point2.lat * Math.PI / 180;
+    const Δφ = (point2.lat - point1.lat) * Math.PI / 180;
+    const Δλ = (point2.lng - point1.lng) * Math.PI / 180;
+
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+      Math.cos(φ1) * Math.cos(φ2) *
+      Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c;
+  };
+
+  // 수동 위치 새로고침
+  const refreshLocation = async () => {
+    try {
+      setLoading(true);
+      const newLocation = await getCurrentLocation();
+      setCurrentLocation(newLocation);
+      await refreshCoursesForLocation(newLocation);
+    } catch (error) {
+      console.error('위치 새로고침 실패:', error);
+      alert('위치 정보를 가져올 수 없습니다. 위치 권한을 확인해주세요.');
+    }
+  };
+
+  // 컴포넌트 언마운트 시 위치 추적 정리
+  useEffect(() => {
+    return () => {
+      if (watchId) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+    };
+  }, [watchId]);
 
   // 필터 적용
   const filteredCourses = courses.filter(course => {
@@ -62,23 +181,69 @@ function CourseRecommendation({ userLocation, weatherData }) {
   // 코스 시작 핸들러
   const handleStartCourse = (course) => {
     alert(`${course.name} 코스를 시작합니다! 실시간 모니터링 페이지로 이동합니다.`);
-    // 실제로는 운동 시작 페이지로 라우팅
   };
 
   return (
     <div className="space-y-6">
       {/* 페이지 헤더 */}
       <div className="bg-white rounded-lg shadow-lg p-6">
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">내 위치 기반 러닝 코스 추천</h2>
-        <p className="text-gray-600">
-          현재 위치에서 1km 이내의 러닝 코스를 추천해드립니다.
-        </p>
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">내 위치 기반 러닝 코스 추천</h2>
+            <p className="text-gray-600">
+              현재 위치에서 1km 이내의 러닝 코스를 추천해드립니다.
+            </p>
+          </div>
+          
+          {/* 위치 추적 컨트롤 */}
+          <div className="flex space-x-2">
+            <button
+              onClick={refreshLocation}
+              disabled={loading}
+              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors disabled:opacity-50"
+            >
+              <i className="fas fa-sync-alt mr-2"></i>
+              {loading ? '새로고침 중...' : '위치 새로고침'}
+            </button>
+            
+            <button
+              onClick={toggleLocationTracking}
+              className={`px-4 py-2 rounded-lg transition-colors ${
+                isTrackingLocation 
+                  ? 'bg-red-500 hover:bg-red-600 text-white' 
+                  : 'bg-green-500 hover:bg-green-600 text-white'
+              }`}
+            >
+              <i className={`fas ${isTrackingLocation ? 'fa-stop' : 'fa-location-arrow'} mr-2`}></i>
+              {isTrackingLocation ? '추적 중지' : '실시간 추적'}
+            </button>
+          </div>
+        </div>
         
         {/* 위치 정보 표시 */}
         {currentLocation && (
-          <div className="mt-4 flex items-center text-sm text-gray-500">
-            <i className="fas fa-map-marker-alt mr-2"></i>
-            <span>위도: {currentLocation.lat.toFixed(4)}, 경도: {currentLocation.lng.toFixed(4)}</span>
+          <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center text-sm text-gray-500">
+                <i className="fas fa-map-marker-alt mr-2 text-blue-500"></i>
+                <span>위도: {currentLocation.lat.toFixed(4)}, 경도: {currentLocation.lng.toFixed(4)}</span>
+              </div>
+              
+              {isTrackingLocation && (
+                <div className="flex items-center text-sm text-green-600">
+                  <div className="animate-pulse w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                  <span>실시간 위치 추적 중</span>
+                </div>
+              )}
+            </div>
+            
+            {/* 위치 히스토리 */}
+            {locationHistory.length > 1 && (
+              <div className="mt-2 text-xs text-gray-400">
+                <span>이동 기록: {locationHistory.length}개 위치 • </span>
+                <span>마지막 업데이트: {new Date(locationHistory[locationHistory.length - 1]?.timestamp).toLocaleTimeString('ko-KR')}</span>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -144,7 +309,7 @@ function CourseRecommendation({ userLocation, weatherData }) {
             <h3 className="text-lg font-semibold text-gray-800">
               주변 러닝 코스 지도 ({filteredCourses.length}개)
             </h3>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-4">
               <label className="flex items-center text-sm">
                 <input
                   type="checkbox"
@@ -154,6 +319,13 @@ function CourseRecommendation({ userLocation, weatherData }) {
                 />
                 경로 표시
               </label>
+              
+              {isTrackingLocation && (
+                <div className="flex items-center text-sm text-green-600 bg-green-50 px-3 py-1 rounded-full">
+                  <div className="animate-pulse w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                  <span>실시간 추적</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -171,9 +343,18 @@ function CourseRecommendation({ userLocation, weatherData }) {
 
       {/* 코스 목록 */}
       <div className="space-y-4">
-        <h3 className="text-xl font-semibold text-gray-800">
-          추천 코스 목록 ({filteredCourses.length}개)
-        </h3>
+        <div className="flex justify-between items-center">
+          <h3 className="text-xl font-semibold text-gray-800">
+            추천 코스 목록 ({filteredCourses.length}개)
+          </h3>
+          
+          {filteredCourses.length > 0 && (
+            <div className="text-sm text-gray-500">
+              <i className="fas fa-info-circle mr-1"></i>
+              {isTrackingLocation ? '위치 변경 시 자동 업데이트됩니다' : '수동 새로고침 또는 실시간 추적을 활성화하세요'}
+            </div>
+          )}
+        </div>
         
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -189,9 +370,25 @@ function CourseRecommendation({ userLocation, weatherData }) {
           <div className="bg-white rounded-lg shadow-lg p-8 text-center">
             <i className="fas fa-map-marked-alt text-gray-400 text-4xl mb-4"></i>
             <p className="text-gray-500 text-lg mb-2">주변에서 코스를 찾을 수 없습니다</p>
-            <p className="text-gray-400 text-sm">
+            <p className="text-gray-400 text-sm mb-4">
               검색 범위를 늘리거나 다른 위치에서 시도해보세요.
             </p>
+            <div className="flex justify-center space-x-2">
+              <button
+                onClick={refreshLocation}
+                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
+              >
+                <i className="fas fa-sync-alt mr-2"></i>
+                위치 새로고침
+              </button>
+              <button
+                onClick={toggleLocationTracking}
+                className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors"
+              >
+                <i className="fas fa-location-arrow mr-2"></i>
+                실시간 추적 시작
+              </button>
+            </div>
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -248,7 +445,7 @@ function CourseRecommendation({ userLocation, weatherData }) {
                         {'★'.repeat(Math.floor(course.rating))}
                         {'☆'.repeat(5 - Math.floor(course.rating))}
                       </div>
-                      <span className="text-gray-600 text-sm">({course.rating})</span>
+                      <span className="text-gray-600 text-sm">({course.rating.toFixed(1)})</span>
                     </div>
                     <div className="text-gray-600 text-sm">
                       <i className="fas fa-map-marker-alt mr-1"></i>
@@ -266,21 +463,6 @@ function CourseRecommendation({ userLocation, weatherData }) {
                         {feature}
                       </span>
                     ))}
-                  </div>
-                  
-                  {/* 날씨 적합성 */}
-                  <div className="mb-4">
-                    <div className="text-sm text-gray-600 mb-1">날씨 적합성:</div>
-                    <div className="flex space-x-1">
-                      {course.weatherSuitability.map((weather, idx) => (
-                        <span
-                          key={idx}
-                          className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded"
-                        >
-                          {weather}
-                        </span>
-                      ))}
-                    </div>
                   </div>
                   
                   {/* 액션 버튼 */}
