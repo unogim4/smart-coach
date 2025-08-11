@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { isGoogleMapsAPILoaded } from '../utils/googleMapsLoader';
 
 function GoogleMap({ 
   center = { lat: 37.5666805, lng: 126.9784147 }, 
@@ -17,11 +18,11 @@ function GoogleMap({
     console.log('GoogleMap 컴포넌트 마운트됨');
     console.log('mapRef.current 초기 상태:', mapRef.current);
     
-    // 3초 후에 지도 초기화 (DOM 완전 로딩 대기)
+    // Google Maps API가 로드된 후 지도 초기화
     const timer = setTimeout(() => {
-      console.log('3초 후 mapRef.current:', mapRef.current);
+      console.log('mapRef.current:', mapRef.current);
       checkAndInitializeMap();
-    }, 3000);
+    }, 500); // 짧은 지연 후 초기화
 
     return () => clearTimeout(timer);
   }, []);
@@ -29,22 +30,30 @@ function GoogleMap({
   const checkAndInitializeMap = () => {
     console.log('Google Maps API 확인 시작...');
     
-    if (window.google && window.google.maps && mapRef.current) {
+    // 새로운 API 로더를 사용하여 확인
+    if (isGoogleMapsAPILoaded() && mapRef.current) {
       console.log('모든 조건 만족, 지도 초기화 시작');
       initializeMap();
     } else {
       console.log('조건 확인:');
+      console.log('- Google Maps API 로드됨:', isGoogleMapsAPILoaded());
       console.log('- window.google:', !!window.google);
       console.log('- window.google.maps:', !!(window.google && window.google.maps));
       console.log('- mapRef.current:', !!mapRef.current);
       
       if (!mapRef.current) {
-        console.error('지도 컨테이너를 찾을 수 없습니다');
+        console.error('지도 컴테이너를 찾을 수 없습니다');
         setMapError(true);
         return;
       }
       
-      // API가 아직 로드되지 않았다면 재시도
+      if (!isGoogleMapsAPILoaded()) {
+        console.error('Google Maps API가 아직 로드되지 않았습니다');
+        setMapError(true);
+        return;
+      }
+      
+      // 재시도 (최대 5초)
       setTimeout(checkAndInitializeMap, 1000);
     }
   };

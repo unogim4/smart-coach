@@ -280,7 +280,7 @@ function LocationBasedCourseMap({
             <span>내 위치</span>
           </div>
           <div className="flex items-center">
-            <div className="w-4 h-4 rounded-full mr-2" style={{backgroundColor: '#EF4444'}}></div>
+            <div className="w-4 h-4 rounded-full mr-2" style={{backgroundColor: '#10B981'}}></div>
             <span>하 (초급)</span>
           </div>
           <div className="flex items-center">
@@ -288,7 +288,7 @@ function LocationBasedCourseMap({
             <span>중 (중급)</span>
           </div>
           <div className="flex items-center">
-            <div className="w-4 h-4 rounded-full mr-2" style={{backgroundColor: '#DC2626'}}></div>
+            <div className="w-4 h-4 rounded-full mr-2" style={{backgroundColor: '#EF4444'}}></div>
             <span>상 (고급)</span>
           </div>
         </div>

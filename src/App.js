@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import './App.css';
 
+// Google Maps API 로더
+import { loadGoogleMapsAPI } from './utils/googleMapsLoader';
+
 // 컴포넌트 imports
 import Header from './components/Header';
 import { AuthProvider, useAuth } from './components/AuthProvider';
@@ -135,6 +138,41 @@ function AppContent() {
 
 // 최상위 App 컴포넌트
 function App() {
+  const [mapsLoading, setMapsLoading] = useState(true);
+  const [mapsError, setMapsError] = useState(null);
+
+  // Google Maps API 로드
+  useEffect(() => {
+    loadGoogleMapsAPI()
+      .then(() => {
+        console.log('✅ Google Maps API 로드 성공');
+        setMapsLoading(false);
+      })
+      .catch((error) => {
+        console.error('❌ Google Maps API 로드 실패:', error);
+        setMapsError(error.message);
+        setMapsLoading(false);
+      });
+  }, []);
+
+  // Google Maps 로딩 중일 때 로딩 화면 표시
+  if (mapsLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <h2 className="text-xl font-semibold text-gray-700 mb-2">스마트 코치 준비 중...</h2>
+          <p className="text-gray-500">Google Maps를 로드하고 있습니다</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Google Maps 로드 실패 시 에러 화면 표시 (하지만 앱은 계속 작동)
+  if (mapsError) {
+    console.warn('⚠️ Google Maps 없이 앱을 시작합니다:', mapsError);
+  }
+
   return (
     <Router>
       <AuthProvider>
