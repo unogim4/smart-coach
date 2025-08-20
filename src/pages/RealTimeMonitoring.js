@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 function RealTimeMonitoring({ userLocation }) {
+  const navigate = useNavigate();
   const [isExercising, setIsExercising] = useState(false);
   const [exerciseData, setExerciseData] = useState({
     distance: 0,
@@ -83,16 +85,13 @@ function RealTimeMonitoring({ userLocation }) {
   }, [exerciseData.time, exerciseData.heartRate, targetHeartRate, isExercising]);
 
   const startExercise = () => {
-    setIsExercising(true);
-    setExerciseData({
-      distance: 0,
-      time: 0,
-      speed: 0,
-      heartRate: 0,
-      calories: 0,
-      pace: '0:00'
+    // 실제 운동 트래킹 페이지로 이동
+    navigate('/exercise-tracking', {
+      state: {
+        exerciseType: exerciseType,
+        targetHeartRate: targetHeartRate
+      }
     });
-    setAiCoachMessages([]);
   };
 
   const stopExercise = () => {

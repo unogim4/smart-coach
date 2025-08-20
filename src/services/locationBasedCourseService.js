@@ -1,41 +1,16 @@
-// 🗺️ 어디서나 작동하는 도로 기반 러닝 코스 추천 서비스
+// 🗺️ 실제 도로 위 왕복 러닝 코스 (다중 API 통합 버전)
+
+import { findNearestRoad, createSmartRoute } from './roadsApiService';
+import { generateOSMCourses } from './openStreetMapService';
 
 const GOOGLE_MAPS_API_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
 
 // 코스 난이도 정의
 export const DIFFICULTY_LEVELS = {
-  EASY: { label: '초급 (1-3km)', color: '#10B981', value: 'easy' },
-  MEDIUM: { label: '중급 (3-5km)', color: '#F59E0B', value: 'medium' },
-  HARD: { label: '고급 (5km+)', color: '#EF4444', value: 'hard' }
+  EASY: { label: '초급 (1-2km)', color: '#10B981', value: 'easy' },
+  MEDIUM: { label: '중급 (2-4km)', color: '#F59E0B', value: 'medium' },
+  HARD: { label: '고급 (4km+)', color: '#EF4444', value: 'hard' }
 };
-
-// 코스 타입 정의
-export const COURSE_TYPES = [
-  { 
-    name: '동네 한바퀴', 
-    icon: '🏘️', 
-    description: '집 주변 가볍게 달리기',
-    distance: [1, 2] // km
-  },
-  { 
-    name: '공원 순환', 
-    icon: '🌳', 
-    description: '근처 공원이나 녹지 코스',
-    distance: [2, 3]
-  },
-  { 
-    name: '도시 탐방', 
-    icon: '🏢', 
-    description: '주변 상가와 도시 거리',
-    distance: [3, 5]
-  },
-  { 
-    name: '장거리 코스', 
-    icon: '🛣️', 
-    description: '본격 장거리 러닝',
-    distance: [5, 10]
-  }
-];
 
 // 사용자 현재 위치 가져오기
 export const getCurrentLocation = () => {
@@ -52,16 +27,17 @@ export const getCurrentLocation = () => {
           lng: position.coords.longitude
         };
         console.log('📍 현재 위치:', location);
+        console.log('📍 Google Maps에서 확인:', `https://www.google.com/maps/@${location.lat},${location.lng},17z`);
         resolve(location);
       },
       (error) => {
         console.warn('⚠️ 위치 정보를 가져올 수 없습니다:', error);
-        // 서울시청 기본 좌표
+        // 강남역 기본 좌표 (확실히 도로가 많은 위치)
         const defaultLocation = {
-          lat: 37.5665,
-          lng: 126.9780
+          lat: 37.4979,
+          lng: 127.0276
         };
-        console.log('📍 기본 위치 사용:', defaultLocation);
+        console.log('📍 기본 위치 사용 (강남역):', defaultLocation);
         resolve(defaultLocation);
       },
       {
@@ -73,195 +49,474 @@ export const getCurrentLocation = () => {
   });
 };
 
-// 🗺️ 근처 도로 위에 러닝 코스 생성
-export const searchNearbyRunningCourses = async (location, radius = 3000) => {
-  console.log('🗺️ === 도로 기반 러닝 코스 생성 시작 ===');
-  console.log('중심 위치:', location);
-  console.log('검색 반경:', radius, 'm');
+// 🚸 가장 가까운 도로로 위치 조정 (Geocoding)
+const snapToNearestRoad = async (location) => {
+  try {
+    const response = await fetch(
+      `https://maps.googleapis.com/maps/api/geocode/json?` +
+      `latlng=${location.lat},${location.lng}` +
+      `&key=${GOOGLE_MAPS_API_KEY}` +
+      `&language=ko`
+    );
+    
+    if (response.ok) {
+      const data = await response.json();
+      if (data.results && data.results.length > 0) {
+        // 첫 번째 결과의 위치 사용 (보통 가장 가까운 주소)
+        const result = data.results[0];
+        const snappedLocation = result.geometry.location;
+        
+        console.log('📍 도로 위치로 조정됨:', result.formatted_address);
+        
+        return {
+          lat: snappedLocation.lat,
+          lng: snappedLocation.lng,
+          address: result.formatted_address
+        };
+      }
+    }
+  } catch (error) {
+    console.error('Geocoding 실패:', error);
+  }
+  
+  return location;
+};
+
+// 🗺️ Directions API 테스트 (짧은 거리부터)
+const testDirectionsAPI = async (start) => {
+  if (!window.google || !window.google.maps) {
+    console.error('Google Maps가 로드되지 않았습니다');
+    return null;
+  }
+  
+  // 매우 가까운 거리로 테스트 (50m)
+  const testEnd = {
+    lat: start.lat + 0.0005, // 약 50m 북쪽
+    lng: start.lng
+  };
+  
+  return new Promise((resolve) => {
+    const directionsService = new window.google.maps.DirectionsService();
+    
+    const request = {
+      origin: new window.google.maps.LatLng(start.lat, start.lng),
+      destination: new window.google.maps.LatLng(testEnd.lat, testEnd.lng),
+      travelMode: window.google.maps.TravelMode.WALKING,
+      unitSystem: window.google.maps.UnitSystem.METRIC
+    };
+    
+    console.log('🧪 Directions API 테스트 (50m)...');
+    
+    directionsService.route(request, (result, status) => {
+      if (status === 'OK') {
+        console.log('✅ Directions API 작동 확인!');
+        resolve(true);
+      } else {
+        console.warn('❌ Directions API 테스트 실패:', status);
+        resolve(false);
+      }
+    });
+  });
+};
+
+// 🗺️ 실제 도로 경로 생성 (개선된 버전)
+const getWalkingRoute = async (start, end, routeName = '') => {
+  if (!window.google || !window.google.maps) {
+    return null;
+  }
+  
+  return new Promise((resolve) => {
+    try {
+      const directionsService = new window.google.maps.DirectionsService();
+      
+      // 다양한 옵션 시도
+      const requests = [
+        // 1차 시도: 기본 설정
+        {
+          origin: new window.google.maps.LatLng(start.lat, start.lng),
+          destination: new window.google.maps.LatLng(end.lat, end.lng),
+          travelMode: window.google.maps.TravelMode.WALKING,
+          unitSystem: window.google.maps.UnitSystem.METRIC
+        },
+        // 2차 시도: 자동차 모드 (도로 확실히 있음)
+        {
+          origin: new window.google.maps.LatLng(start.lat, start.lng),
+          destination: new window.google.maps.LatLng(end.lat, end.lng),
+          travelMode: window.google.maps.TravelMode.DRIVING,
+          unitSystem: window.google.maps.UnitSystem.METRIC
+        }
+      ];
+      
+      let attemptCount = 0;
+      
+      const tryNextRequest = () => {
+        if (attemptCount >= requests.length) {
+          console.warn(`❌ ${routeName} 모든 시도 실패`);
+          resolve(null);
+          return;
+        }
+        
+        const request = requests[attemptCount];
+        const mode = attemptCount === 0 ? 'WALKING' : 'DRIVING';
+        
+        console.log(`📍 ${routeName} 시도 ${attemptCount + 1} (${mode}):`, {
+          시작: `${start.lat.toFixed(6)}, ${start.lng.toFixed(6)}`,
+          목적지: `${end.lat.toFixed(6)}, ${end.lng.toFixed(6)}`,
+          거리: `약 ${calculateDistance(start, end).toFixed(0)}m`
+        });
+        
+        directionsService.route(request, (result, status) => {
+          if (status === 'OK' && result && result.routes && result.routes.length > 0) {
+            console.log(`✅ ${routeName} 성공! (${mode} 모드)`);
+            
+            const route = result.routes[0];
+            const pathPoints = [];
+            
+            route.legs.forEach(leg => {
+              leg.steps.forEach(step => {
+                step.path.forEach(point => {
+                  pathPoints.push({
+                    lat: point.lat(),
+                    lng: point.lng()
+                  });
+                });
+              });
+            });
+            
+            // 왕복 경로
+            const returnPath = [...pathPoints].reverse();
+            const fullPath = [...pathPoints, ...returnPath];
+            
+            const oneWayDistance = route.legs.reduce((sum, leg) => sum + leg.distance.value, 0);
+            const oneWayDuration = route.legs.reduce((sum, leg) => sum + leg.duration.value, 0);
+            
+            resolve({
+              path: fullPath,
+              distance: oneWayDistance * 2,
+              duration: oneWayDuration * 2,
+              success: true,
+              mode: mode
+            });
+          } else {
+            console.warn(`⚠️ ${routeName} ${mode} 실패:`, status);
+            attemptCount++;
+            tryNextRequest();
+          }
+        });
+      };
+      
+      tryNextRequest();
+      
+    } catch (error) {
+      console.error('Directions Service 오류:', error);
+      resolve(null);
+    }
+  });
+};
+
+// 🗺️ 러닝 코스 생성 메인 함수 (Roads API 우선)
+export const searchNearbyRunningCourses = async (location, radius = 2000) => {
+  console.log('🗺️ === 러닝 코스 생성 시작 (Roads API) ===');
+  console.log('원본 위치:', location);
   
   try {
-    // 사용자 위치 주변의 실제 도로 위 포인트들 생성
-    const courses = await generateRoadBasedCourses(location, radius);
+    // 1. Roads API로 도로 위치 찾기
+    const roadLocation = await findNearestRoad(location);
+    console.log('🛣️ Roads API 도로 위치:', roadLocation);
     
-    console.log(`✅ 총 ${courses.length}개 도로 기반 코스 생성 완료!`);
+    // 2. Roads API로 스마트 경로 생성 시도
+    const smartCourses = await generateSmartRouteCourses(roadLocation, radius);
+    if (smartCourses && smartCourses.length > 0) {
+      console.log('✅ Roads API로 코스 생성 성공');
+      return smartCourses;
+    }
+    
+    // 3. Roads API 실패 시 OpenStreetMap 시도
+    console.log('🔄 Roads API 실패, OpenStreetMap 시도...');
+    const osmCourses = await generateOSMCourses(location, radius);
+    if (osmCourses && osmCourses.length > 0) {
+      console.log('✅ OpenStreetMap으로 코스 생성 성공');
+      // OSM 코스를 기존 포맷으로 변환
+      return osmCourses.map((course, index) => ({
+        ...course,
+        id: course.id,
+        name: course.name,
+        location: course.end || location,
+        waypoints: course.path,
+        rating: 4.2,
+        vicinity: course.vicinity || course.description,
+        courseType: 'OSM 도로',
+        icon: '🗺️',
+        difficulty: course.difficulty === '초급' ? DIFFICULTY_LEVELS.EASY :
+                   course.difficulty === '중급' ? DIFFICULTY_LEVELS.MEDIUM :
+                   DIFFICULTY_LEVELS.HARD,
+        estimatedDistance: `${(course.distance / 1000).toFixed(1)}km`,
+        estimatedTime: `${Math.round(course.distance / 83)}분`,
+        elevationGain: '+10m',
+        features: course.features,
+        weatherSuitability: ['맑음', '흐림'],
+        isOpen: true,
+        safetyLevel: 'high',
+        roadType: 'OSM 도로',
+        trafficLevel: getTrafficLevel(new Date().getHours()),
+        realPlace: true,
+        isCircular: false,
+        isRoadBased: true,
+        apiType: 'OpenStreetMap'
+      }));
+    }
+    
+    // 4. 모든 API 실패 시 Directions API 테스트
+    const apiWorks = await testDirectionsAPI(roadLocation);
+    
+    if (!apiWorks) {
+      console.warn('⚠️ Directions API도 사용 불가');
+      console.log('💡 대체 방법: 기본 경로 사용');
+      return generateStraightPathCourses(roadLocation);
+    }
+    
+    const courses = [];
+    
+    // 3. 매우 짧은 거리부터 시작 (100m부터)
+    const destinations = [
+      // 초단거리 (성공 확률 매우 높음)
+      { name: '북쪽 100m', distance: 100, angle: 0 },
+      { name: '동쪽 150m', distance: 150, angle: Math.PI / 2 },
+      { name: '남쪽 200m', distance: 200, angle: Math.PI },
+      { name: '서쪽 250m', distance: 250, angle: 3 * Math.PI / 2 },
+      
+      // 단거리
+      { name: '북동 300m', distance: 300, angle: Math.PI / 4 },
+      { name: '남동 400m', distance: 400, angle: 3 * Math.PI / 4 },
+      { name: '남서 500m', distance: 500, angle: 5 * Math.PI / 4 },
+      
+      // 중거리
+      { name: '북쪽 750m', distance: 750, angle: 0 },
+      { name: '동쪽 1km', distance: 1000, angle: Math.PI / 2 }
+    ];
+    
+    let successCount = 0;
+    
+    for (let i = 0; i < destinations.length && courses.length < 5; i++) {
+      const dest = destinations[i];
+      
+      // 목적지 좌표
+      const endpoint = {
+        lat: roadLocation.lat + (dest.distance / 111320) * Math.cos(dest.angle),
+        lng: roadLocation.lng + (dest.distance / 111320) * Math.sin(dest.angle) / Math.cos(roadLocation.lat * Math.PI / 180)
+      };
+      
+      // Directions API 시도
+      const routeData = await getWalkingRoute(roadLocation, endpoint, dest.name);
+      
+      if (routeData && routeData.success) {
+        successCount++;
+        
+        const difficulty = routeData.distance < 1000 ? DIFFICULTY_LEVELS.EASY :
+                          routeData.distance < 3000 ? DIFFICULTY_LEVELS.MEDIUM :
+                          DIFFICULTY_LEVELS.HARD;
+        
+        courses.push({
+          id: `route-${i}`,
+          name: `${dest.name} 왕복`,
+          location: endpoint,
+          waypoints: routeData.path,
+          rating: 4.5,
+          vicinity: roadLocation.address || `${dest.name} 방향`,
+          courseType: routeData.mode === 'WALKING' ? '도보 왕복' : '도로 왕복',
+          icon: '🛣️',
+          difficulty: difficulty,
+          distance: Math.round(routeData.distance),
+          estimatedDistance: `${(routeData.distance / 1000).toFixed(1)}km`,
+          estimatedTime: `${Math.round(routeData.duration / 60)}분`,
+          elevationGain: '+' + Math.round(Math.random() * 10 + 5) + 'm',
+          features: ['실제 도로', '왕복 코스', `${routeData.mode} 경로`],
+          weatherSuitability: ['맑음', '흐림'],
+          isOpen: true,
+          safetyLevel: 'high',
+          roadType: routeData.mode === 'WALKING' ? '보행자 도로' : '일반 도로',
+          trafficLevel: getTrafficLevel(new Date().getHours()),
+          realPlace: true,
+          isCircular: false,
+          isRoadBased: true
+        });
+        
+        console.log(`✅ ${successCount}. "${dest.name}" 도로 경로 생성`);
+      }
+      
+      // API 호출 간격
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+    
+    // 성공한 코스가 없으면 직선 경로 추가
+    if (courses.length === 0) {
+      console.warn('⚠️ 도로 경로 생성 실패, 직선 경로 사용');
+      return generateStraightPathCourses(roadLocation);
+    }
+    
+    console.log(`✅ 총 ${courses.length}개 코스 생성 완료`);
     return courses;
     
   } catch (error) {
-    console.error('❌ 코스 생성 실패:', error);
-    return generateDefaultCourses(location);
+    console.error('❌ 코스 생성 오류:', error);
+    return generateStraightPathCourses(location);
   }
 };
 
-// 도로 위의 포인트 찾기 (Google Roads API 대신 계산으로 근사)
-const findNearbyRoadPoints = async (center, radius) => {
-  const points = [];
-  const numPoints = 8; // 8방향으로 포인트 생성
-  
-  for (let i = 0; i < numPoints; i++) {
-    const angle = (i / numPoints) * 2 * Math.PI;
-    
-    // 다양한 거리에 포인트 생성 (500m ~ radius)
-    const distances = [500, 1000, 1500, 2000, 2500, 3000];
-    
-    for (const distance of distances) {
-      if (distance <= radius) {
-        // 미터를 위도/경도 차이로 변환 (대략적인 계산)
-        const latOffset = (distance * Math.cos(angle)) / 111320; // 1도 ≈ 111.32km
-        const lngOffset = (distance * Math.sin(angle)) / (111320 * Math.cos(center.lat * Math.PI / 180));
-        
-        const point = {
-          lat: center.lat + latOffset,
-          lng: center.lng + lngOffset,
-          distance: distance,
-          angle: angle,
-          direction: getDirectionName(angle)
-        };
-        
-        // 도로가 있을 가능성이 높은 위치로 미세 조정
-        const roadAdjusted = adjustToLikelyRoad(point, center);
-        points.push(roadAdjusted);
-      }
-    }
-  }
-  
-  return points;
-};
-
-// 방향 이름 가져오기
-const getDirectionName = (angle) => {
-  const directions = ['북', '북동', '동', '남동', '남', '남서', '서', '북서'];
-  const index = Math.round((angle / (2 * Math.PI)) * 8) % 8;
-  return directions[index];
-};
-
-// 도로가 있을 가능성이 높은 위치로 조정
-const adjustToLikelyRoad = (point, center) => {
-  // 도시는 대체로 격자 구조이므로 약간의 조정
-  const gridSize = 0.001; // 약 100m 격자
-  
-  const adjustedPoint = {
-    ...point,
-    lat: Math.round(point.lat / gridSize) * gridSize,
-    lng: Math.round(point.lng / gridSize) * gridSize
-  };
-  
-  // 중심에서의 실제 거리 재계산
-  adjustedPoint.actualDistance = calculateDistance(center, adjustedPoint);
-  
-  return adjustedPoint;
-};
-
-// 도로 기반 코스 생성
-const generateRoadBasedCourses = async (userLocation, maxRadius) => {
-  console.log('🚸 도로 위 러닝 코스 생성 중...');
-  
-  // 근처 도로 포인트들 찾기
-  const roadPoints = await findNearbyRoadPoints(userLocation, maxRadius);
-  
-  // 거리별로 그룹화
-  const shortPoints = roadPoints.filter(p => p.actualDistance <= 1500);
-  const mediumPoints = roadPoints.filter(p => p.actualDistance > 1500 && p.actualDistance <= 3000);
-  const longPoints = roadPoints.filter(p => p.actualDistance > 3000 && p.actualDistance <= 5000);
+// 🏃 Roads API를 활용한 스마트 코스 생성
+const generateSmartRouteCourses = async (center, radius = 1500) => {
+  console.log('🚀 Roads API로 스마트 코스 생성 중...');
   
   const courses = [];
+  const destinations = [
+    { name: '북쪽', distance: radius * 0.3, angle: 0 },
+    { name: '동쪽', distance: radius * 0.4, angle: Math.PI / 2 },
+    { name: '남쪽', distance: radius * 0.5, angle: Math.PI },
+    { name: '서쪽', distance: radius * 0.6, angle: 3 * Math.PI / 2 },
+    { name: '북동쪽', distance: radius * 0.35, angle: Math.PI / 4 }
+  ];
   
-  // 초급 코스 (1-3km) - 가까운 포인트들 연결
-  if (shortPoints.length >= 2) {
-    for (let i = 0; i < Math.min(3, shortPoints.length - 1); i++) {
-      const course = createCircularCourse(
-        userLocation,
-        shortPoints[i],
-        shortPoints[i + 1] || shortPoints[0],
-        COURSE_TYPES[0], // 동네 한바퀴
-        DIFFICULTY_LEVELS.EASY,
-        i
-      );
-      courses.push(course);
+  for (let i = 0; i < destinations.length && courses.length < 5; i++) {
+    const dest = destinations[i];
+    
+    // 목적지 계산
+    const endpoint = {
+      lat: center.lat + (dest.distance / 111320) * Math.cos(dest.angle),
+      lng: center.lng + (dest.distance / 111320) * Math.sin(dest.angle) / Math.cos(center.lat * Math.PI / 180)
+    };
+    
+    try {
+      // Roads API로 스마트 경로 생성
+      const route = await createSmartRoute(center, endpoint, 30);
+      
+      if (route.isSnapped) {
+        const difficulty = route.distance < 1500 ? DIFFICULTY_LEVELS.EASY :
+                          route.distance < 3000 ? DIFFICULTY_LEVELS.MEDIUM :
+                          DIFFICULTY_LEVELS.HARD;
+        
+        courses.push({
+          id: `smart-${i}`,
+          name: `${dest.name} 도로 코스`,
+          location: route.end,
+          waypoints: route.path,
+          rating: 4.7,
+          vicinity: `${dest.name} 방향 도로`,
+          courseType: '도로 스냅',
+          icon: '🛣️',
+          difficulty: difficulty,
+          distance: Math.round(route.distance),
+          estimatedDistance: `${(route.distance / 1000).toFixed(1)}km`,
+          estimatedTime: `${Math.round(route.distance / 83)}분`,
+          elevationGain: '+' + Math.round(Math.random() * 15 + 5) + 'm',
+          features: ['실제 도로', 'Roads API', '안전한 경로'],
+          weatherSuitability: ['맑음', '흐림'],
+          isOpen: true,
+          safetyLevel: 'very_high',
+          roadType: '도로 스냅',
+          trafficLevel: getTrafficLevel(new Date().getHours()),
+          realPlace: true,
+          isCircular: false,
+          isRoadBased: true,
+          apiType: 'Roads API'
+        });
+        
+        console.log(`✅ ${dest.name} Roads API 코스 생성 (${route.distance.toFixed(0)}m)`);
+      }
+    } catch (error) {
+      console.warn(`⚠️ ${dest.name} Roads API 실패:`, error);
     }
-  }
-  
-  // 중급 코스 (3-5km) - 중간 거리 포인트들
-  if (mediumPoints.length >= 2) {
-    for (let i = 0; i < Math.min(3, mediumPoints.length - 1); i++) {
-      const course = createCircularCourse(
-        userLocation,
-        mediumPoints[i],
-        mediumPoints[i + 1] || mediumPoints[0],
-        COURSE_TYPES[2], // 도시 탐방
-        DIFFICULTY_LEVELS.MEDIUM,
-        i + 3
-      );
-      courses.push(course);
-    }
-  }
-  
-  // 고급 코스 (5km+) - 먼 거리 포인트들
-  if (longPoints.length >= 2) {
-    for (let i = 0; i < Math.min(2, longPoints.length - 1); i++) {
-      const course = createCircularCourse(
-        userLocation,
-        longPoints[i],
-        longPoints[i + 1] || longPoints[0],
-        COURSE_TYPES[3], // 장거리 코스
-        DIFFICULTY_LEVELS.HARD,
-        i + 6
-      );
-      courses.push(course);
-    }
-  }
-  
-  // 코스가 너무 적으면 기본 코스 추가
-  if (courses.length < 5) {
-    const defaultCourses = generateDefaultCourses(userLocation);
-    courses.push(...defaultCourses.slice(0, 5 - courses.length));
+    
+    // API 호출 간격
+    await new Promise(resolve => setTimeout(resolve, 200));
   }
   
   return courses;
 };
 
-// 순환 코스 생성
-const createCircularCourse = (start, point1, point2, courseType, difficulty, index) => {
-  // 순환 경로: 시작 -> point1 -> point2 -> 시작
-  const waypoints = [start, point1, point2, start];
-  const totalDistance = calculateRouteDistance(waypoints);
+// 직선 경로 코스 생성
+const generateStraightPathCourses = (center) => {
+  console.log('📝 직선 왕복 코스 생성 중...');
   
-  return {
-    id: `road-course-${index}`,
-    name: `${point1.direction}쪽 ${courseType.name}`,
-    location: point1, // 첫 번째 경유지를 대표 위치로
-    waypoints: waypoints, // 경로 포인트들
-    rating: 3.5 + Math.random() * 1.5,
-    vicinity: `${point1.direction} 방향 ${Math.round(point1.actualDistance)}m`,
-    courseType: courseType.name,
-    icon: courseType.icon,
-    difficulty: difficulty,
-    distance: Math.round(totalDistance),
-    estimatedDistance: `${(totalDistance / 1000).toFixed(1)}km`,
-    estimatedTime: calculateEstimatedTime(totalDistance),
-    elevationGain: '+' + Math.round(Math.random() * 50 + 10) + 'm',
-    features: generateCourseFeatures(courseType, difficulty),
-    weatherSuitability: ['맑음', '흐림', '선선함'],
-    isOpen: true,
-    safetyLevel: 'high',
-    roadType: '도시 도로',
-    trafficLevel: getTrafficLevel(new Date().getHours()),
-    realPlace: true,
-    isCircular: true // 순환 코스 표시
-  };
+  const courses = [];
+  const destinations = [
+    { name: '북쪽 200m', distance: 200, angle: 0 },
+    { name: '동쪽 300m', distance: 300, angle: Math.PI / 2 },
+    { name: '남쪽 400m', distance: 400, angle: Math.PI },
+    { name: '서쪽 500m', distance: 500, angle: 3 * Math.PI / 2 },
+    { name: '북동 350m', distance: 350, angle: Math.PI / 4 }
+  ];
+  
+  destinations.forEach((dest, i) => {
+    const endpoint = {
+      lat: center.lat + (dest.distance / 111320) * Math.cos(dest.angle),
+      lng: center.lng + (dest.distance / 111320) * Math.sin(dest.angle) / Math.cos(center.lat * Math.PI / 180)
+    };
+    
+    // 직선 왕복 경로 생성
+    const path = [];
+    const steps = 20;
+    
+    // 갈 때
+    for (let j = 0; j <= steps; j++) {
+      const t = j / steps;
+      path.push({
+        lat: center.lat + (endpoint.lat - center.lat) * t,
+        lng: center.lng + (endpoint.lng - center.lng) * t
+      });
+    }
+    
+    // 올 때
+    for (let j = steps - 1; j >= 0; j--) {
+      const t = j / steps;
+      path.push({
+        lat: center.lat + (endpoint.lat - center.lat) * t,
+        lng: center.lng + (endpoint.lng - center.lng) * t
+      });
+    }
+    
+    const totalDistance = dest.distance * 2;
+    
+    courses.push({
+      id: `straight-${i}`,
+      name: `${dest.name} 직선 왕복`,
+      location: endpoint,
+      waypoints: path,
+      rating: 3.5,
+      vicinity: `${dest.name} 방향`,
+      courseType: '직선 왕복',
+      icon: '➡️',
+      difficulty: totalDistance < 1000 ? DIFFICULTY_LEVELS.EASY : DIFFICULTY_LEVELS.MEDIUM,
+      distance: totalDistance,
+      estimatedDistance: `${(totalDistance / 1000).toFixed(1)}km`,
+      estimatedTime: `${Math.round(totalDistance / 83)}분`,
+      elevationGain: '+5m',
+      features: ['직선 경로', '단순 왕복'],
+      weatherSuitability: ['맑음'],
+      isOpen: true,
+      safetyLevel: 'medium',
+      roadType: '일반 경로',
+      trafficLevel: '보통',
+      realPlace: false,
+      isCircular: false,
+      isRoadBased: false
+    });
+  });
+  
+  console.log(`✅ ${courses.length}개 직선 코스 생성 완료`);
+  return courses;
 };
 
-// 경로 총 거리 계산
-const calculateRouteDistance = (waypoints) => {
-  let totalDistance = 0;
-  for (let i = 0; i < waypoints.length - 1; i++) {
-    totalDistance += calculateDistance(waypoints[i], waypoints[i + 1]);
-  }
-  return totalDistance;
+// 시간대별 교통량
+const getTrafficLevel = (hour) => {
+  if (hour >= 7 && hour <= 9) return '높음 (출근)';
+  if (hour >= 17 && hour <= 19) return '높음 (퇴근)';
+  if (hour >= 22 || hour <= 5) return '매우 낮음';
+  return '보통';
 };
 
-// 두 지점 간 거리 계산 (미터 단위)
-const calculateDistance = (point1, point2) => {
-  const R = 6371e3; // 지구 반경 (미터)
+// 거리 계산
+export const calculateDistance = (point1, point2) => {
+  const R = 6371e3;
   const φ1 = point1.lat * Math.PI / 180;
   const φ2 = point2.lat * Math.PI / 180;
   const Δφ = (point2.lat - point1.lat) * Math.PI / 180;
@@ -275,147 +530,7 @@ const calculateDistance = (point1, point2) => {
   return R * c;
 };
 
-// 예상 시간 계산
-const calculateEstimatedTime = (distanceInMeters) => {
-  // 평균 러닝 속도: 10km/h (6분/km)
-  const avgSpeedKmh = 10;
-  const timeMinutes = Math.round((distanceInMeters / 1000) / avgSpeedKmh * 60);
-  
-  if (timeMinutes < 60) {
-    return `${timeMinutes}분`;
-  } else {
-    const hours = Math.floor(timeMinutes / 60);
-    const mins = timeMinutes % 60;
-    return `${hours}시간 ${mins}분`;
-  }
-};
-
-// 시간대별 교통량 추정
-const getTrafficLevel = (hour) => {
-  if (hour >= 7 && hour <= 9) return '높음 (출근)';
-  if (hour >= 17 && hour <= 19) return '높음 (퇴근)';
-  if (hour >= 22 || hour <= 5) return '매우 낮음';
-  return '보통';
-};
-
-// 코스 특징 생성
-const generateCourseFeatures = (courseType, difficulty) => {
-  const features = [];
-  
-  // 코스 타입별 특징
-  if (courseType.name.includes('동네')) {
-    features.push('익숙한 환경', '안전한 도로');
-  } else if (courseType.name.includes('공원')) {
-    features.push('자연 친화적', '공기 좋음');
-  } else if (courseType.name.includes('도시')) {
-    features.push('다양한 풍경', '편의시설 많음');
-  } else {
-    features.push('도전적 코스', '지구력 향상');
-  }
-  
-  // 난이도별 특징
-  if (difficulty.value === 'easy') {
-    features.push('초보자 적합', '완만한 코스');
-  } else if (difficulty.value === 'medium') {
-    features.push('적당한 강도', '체력 향상');
-  } else {
-    features.push('고강도 훈련', '전문가 추천');
-  }
-  
-  return features.slice(0, 4);
-};
-
-// 기본 코스 생성 (폴백)
-const generateDefaultCourses = (location) => {
-  console.log('📝 기본 러닝 코스 생성 중...');
-  
-  const courses = [];
-  
-  // 가까운 거리에 다양한 코스 생성
-  const distances = [1000, 1500, 2000, 2500, 3000];
-  const angles = [0, Math.PI/2, Math.PI, 3*Math.PI/2]; // 동서남북
-  
-  distances.forEach((distance, dIdx) => {
-    const angle = angles[dIdx % angles.length];
-    const direction = getDirectionName(angle);
-    
-    const latOffset = (distance * Math.cos(angle)) / 111320;
-    const lngOffset = (distance * Math.sin(angle)) / (111320 * Math.cos(location.lat * Math.PI / 180));
-    
-    const endPoint = {
-      lat: location.lat + latOffset,
-      lng: location.lng + lngOffset
-    };
-    
-    const difficulty = distance < 1500 ? DIFFICULTY_LEVELS.EASY :
-                      distance < 2500 ? DIFFICULTY_LEVELS.MEDIUM :
-                      DIFFICULTY_LEVELS.HARD;
-    
-    const courseType = distance < 1500 ? COURSE_TYPES[0] :
-                      distance < 2500 ? COURSE_TYPES[1] :
-                      COURSE_TYPES[2];
-    
-    courses.push({
-      id: `default-${dIdx}`,
-      name: `${direction}쪽 ${courseType.name}`,
-      location: endPoint,
-      waypoints: [location, endPoint, location],
-      rating: 4.0,
-      vicinity: `${direction} 방향 ${distance}m`,
-      courseType: courseType.name,
-      icon: courseType.icon,
-      difficulty: difficulty,
-      distance: distance * 2, // 왕복
-      estimatedDistance: `${(distance * 2 / 1000).toFixed(1)}km`,
-      estimatedTime: calculateEstimatedTime(distance * 2),
-      elevationGain: '+' + Math.round(Math.random() * 30 + 10) + 'm',
-      features: generateCourseFeatures(courseType, difficulty),
-      weatherSuitability: ['맑음', '흐림'],
-      isOpen: true,
-      safetyLevel: 'medium',
-      roadType: '일반 도로',
-      trafficLevel: '보통',
-      realPlace: true,
-      isCircular: true
-    });
-  });
-  
-  return courses.slice(0, 8);
-};
-
-// 🗺️ 러닝 경로 생성 (폴리라인용)
+// 러닝 경로 반환
 export const generateRunningRoute = (course) => {
-  console.log(`🗺️ ${course.name} 경로 생성 중...`);
-  
-  if (course.waypoints && course.waypoints.length > 0) {
-    // 이미 waypoints가 있는 경우 그대로 사용
-    const smoothRoute = [];
-    
-    for (let i = 0; i < course.waypoints.length - 1; i++) {
-      const start = course.waypoints[i];
-      const end = course.waypoints[i + 1];
-      
-      // 두 점 사이를 부드럽게 연결
-      smoothRoute.push(start);
-      
-      // 중간 점들 추가 (더 부드러운 경로)
-      const steps = 5;
-      for (let j = 1; j < steps; j++) {
-        const t = j / steps;
-        smoothRoute.push({
-          lat: start.lat + (end.lat - start.lat) * t,
-          lng: start.lng + (end.lng - start.lng) * t
-        });
-      }
-    }
-    
-    // 마지막 점 추가
-    smoothRoute.push(course.waypoints[course.waypoints.length - 1]);
-    
-    console.log(`✅ ${course.name} 경로 생성 완료: ${smoothRoute.length}개 포인트`);
-    return smoothRoute;
-  }
-  
-  // waypoints가 없는 경우 기본 경로 생성
-  return [course.location];
+  return course.waypoints || [course.location];
 };

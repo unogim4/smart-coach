@@ -1,5 +1,20 @@
-// Google Maps API를 활용한 날씨 서비스 (더미 데이터 활용)
+// 🌤️ OpenWeather API를 활용한 실제 날씨 서비스
+
+const OPENWEATHER_API_KEY = process.env.REACT_APP_OPENWEATHER_API_KEY;
 const GOOGLE_MAPS_API_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
+
+// API 키 확인
+const checkAPIKey = () => {
+  if (!OPENWEATHER_API_KEY || OPENWEATHER_API_KEY === 'YOUR_API_KEY_HERE') {
+    console.warn('⚠️ OpenWeather API 키가 설정되지 않았습니다!');
+    console.log('📝 설정 방법:');
+    console.log('1. https://openweathermap.org/api 에서 무료 API 키 발급');
+    console.log('2. .env.local 파일에 REACT_APP_OPENWEATHER_API_KEY=발급받은키 추가');
+    console.log('3. npm start로 앱 재시작');
+    return false;
+  }
+  return true;
+};
 
 // Google Maps Geocoding API를 사용하여 위치 정보 가져오기
 export const getLocationInfo = async (lat, lng) => {
@@ -45,151 +60,183 @@ const getDefaultLocationInfo = () => ({
   district: '강남구'
 });
 
-// 실제 날씨 API 대신 시뮬레이션된 날씨 데이터 사용
+// 🌟 실제 날씨 API 호출 (OpenWeather)
 export const getCurrentWeather = async (lat, lng) => {
   try {
+    // API 키 체크
+    if (!checkAPIKey()) {
+      console.log('🎭 더미 데이터 모드로 전환...');
+      return getDummyWeatherData();
+    }
+
+    console.log('🌤️ OpenWeather API 호출 중...');
+    
+    // OpenWeather Current Weather API
+    const weatherUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${OPENWEATHER_API_KEY}&units=metric&lang=kr`;
+    
+    const response = await fetch(weatherUrl);
+    
+    if (!response.ok) {
+      if (response.status === 401) {
+        console.error('❌ API 키가 유효하지 않습니다!');
+      } else if (response.status === 429) {
+        console.error('❌ API 호출 한도 초과!');
+      } else {
+        console.error(`❌ API 오류: ${response.status}`);
+      }
+      return getDummyWeatherData();
+    }
+    
+    const data = await response.json();
+    console.log('✅ 실제 날씨 데이터 수신:', data);
+    
     // 위치 정보 가져오기
     const locationInfo = await getLocationInfo(lat, lng);
     
-    // 현재 시간 기반으로 동적 날씨 데이터 생성
-    const now = new Date();
-    const hour = now.getHours();
-    const season = getSeason(now.getMonth());
-    
-    // 시간대와 계절에 따른 온도 계산
-    let baseTemp = getSeasonalTemp(season);
-    let timeAdjustment = getTimeAdjustment(hour);
-    
+    // OpenWeather 데이터를 우리 형식으로 변환
     const weatherData = {
-      temperature: Math.round(baseTemp + timeAdjustment + (Math.random() - 0.5) * 4),
-      feelsLike: Math.round(baseTemp + timeAdjustment + (Math.random() - 0.5) * 3),
-      humidity: Math.round(50 + Math.random() * 30),
-      description: getWeatherDescription(hour, season),
-      icon: generateWeatherIcon(hour, season),
-      windSpeed: Math.round((Math.random() * 5 + 1) * 10) / 10,
-      windDirection: Math.round(Math.random() * 360),
-      clouds: Math.round(Math.random() * 60),
-      visibility: Math.round((8 + Math.random() * 4) * 10) / 10,
-      pressure: Math.round(1010 + Math.random() * 20),
-      sunrise: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 6, 30),
-      sunset: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 18, 30),
-      cityName: locationInfo.city,
-      uvIndex: getUVIndex(hour)
+      temperature: Math.round(data.main.temp),
+      feelsLike: Math.round(data.main.feels_like),
+      humidity: data.main.humidity,
+      description: data.weather[0].description,
+      icon: data.weather[0].icon,
+      windSpeed: data.wind.speed,
+      windDirection: data.wind.deg || 0,
+      clouds: data.clouds.all,
+      visibility: (data.visibility / 1000).toFixed(1), // 미터를 킬로미터로
+      pressure: data.main.pressure,
+      sunrise: new Date(data.sys.sunrise * 1000),
+      sunset: new Date(data.sys.sunset * 1000),
+      cityName: data.name || locationInfo.city,
+      uvIndex: 0, // UV는 별도 API 필요
+      
+      // 추가 정보
+      tempMin: Math.round(data.main.temp_min),
+      tempMax: Math.round(data.main.temp_max),
+      weatherMain: data.weather[0].main,
+      country: data.sys.country,
+      timezone: data.timezone,
+      
+      // 실제 데이터 플래그
+      isRealData: true
     };
 
     return weatherData;
+    
   } catch (error) {
     console.error('날씨 정보 가져오기 실패:', error);
     return getDummyWeatherData();
   }
 };
 
-// 계절 판단 함수
-const getSeason = (month) => {
-  if (month >= 2 && month <= 4) return 'spring';
-  if (month >= 5 && month <= 7) return 'summer';
-  if (month >= 8 && month <= 10) return 'autumn';
-  return 'winter';
-};
-
-// 계절별 기본 온도
-const getSeasonalTemp = (season) => {
-  switch(season) {
-    case 'spring': return 18;
-    case 'summer': return 28;
-    case 'autumn': return 20;
-    case 'winter': return 5;
-    default: return 15;
-  }
-};
-
-// 시간대별 온도 조정
-const getTimeAdjustment = (hour) => {
-  if (hour >= 6 && hour <= 8) return -3; // 새벽
-  if (hour >= 9 && hour <= 11) return 0;  // 오전
-  if (hour >= 12 && hour <= 16) return 3; // 낮
-  if (hour >= 17 && hour <= 19) return 1; // 저녁
-  return -2; // 밤
-};
-
-// 날씨 설명 생성
-const getWeatherDescription = (hour, season) => {
-  const descriptions = {
-    spring: ['맑음', '구름 조금', '흐림', '봄비'],
-    summer: ['맑음', '더움', '소나기', '구름 많음'],
-    autumn: ['맑음', '선선함', '흐림', '구름 조금'],
-    winter: ['맑음', '춥음', '흐림', '눈']
-  };
-  
-  const seasonDescriptions = descriptions[season] || descriptions.spring;
-  return seasonDescriptions[Math.floor(Math.random() * seasonDescriptions.length)];
-};
-
-// 날씨 아이콘 생성 (내부 함수)
-const generateWeatherIcon = (hour, season) => {
-  const isDay = hour >= 6 && hour <= 18;
-  const icons = {
-    day: ['01d', '02d', '03d', '04d'],
-    night: ['01n', '02n', '03n', '04n']
-  };
-  
-  const timeIcons = isDay ? icons.day : icons.night;
-  return timeIcons[Math.floor(Math.random() * timeIcons.length)];
-};
-
-// UV 지수 계산
-const getUVIndex = (hour) => {
-  if (hour >= 10 && hour <= 14) return Math.round(6 + Math.random() * 4);
-  if (hour >= 8 && hour <= 16) return Math.round(3 + Math.random() * 3);
-  return Math.round(Math.random() * 2);
-};
-
-// 5일 날씨 예보 생성
+// 🌟 5일 날씨 예보 (OpenWeather Forecast API)
 export const getWeatherForecast = async (lat, lng) => {
   try {
-    const dailyForecast = [];
-    const today = new Date();
+    if (!checkAPIKey()) {
+      return getDummyForecastData();
+    }
+
+    console.log('📅 5일 예보 API 호출 중...');
     
-    for (let i = 1; i <= 5; i++) {
-      const futureDate = new Date(today.getTime() + (i * 24 * 60 * 60 * 1000));
-      const season = getSeason(futureDate.getMonth());
-      const baseTemp = getSeasonalTemp(season);
-      
-      dailyForecast.push({
-        date: futureDate,
-        temperature: {
-          min: Math.round(baseTemp - 5 + Math.random() * 3),
-          max: Math.round(baseTemp + 3 + Math.random() * 4)
-        },
-        description: getWeatherDescription(12, season),
-        icon: generateWeatherIcon(12, season),
-        humidity: Math.round(50 + Math.random() * 30),
-        windSpeed: Math.round((Math.random() * 5 + 1) * 10) / 10,
-        clouds: Math.round(Math.random() * 70)
-      });
+    // OpenWeather 5 Day Forecast API
+    const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lng}&appid=${OPENWEATHER_API_KEY}&units=metric&lang=kr`;
+    
+    const response = await fetch(forecastUrl);
+    
+    if (!response.ok) {
+      console.error('예보 API 오류:', response.status);
+      return getDummyForecastData();
     }
     
+    const data = await response.json();
+    console.log('✅ 실제 예보 데이터 수신');
+    
+    // 5일간 일별 데이터로 변환 (3시간 간격 데이터를 일별로 그룹화)
+    const dailyData = {};
+    
+    data.list.forEach(item => {
+      const date = new Date(item.dt * 1000).toDateString();
+      
+      if (!dailyData[date]) {
+        dailyData[date] = {
+          temps: [],
+          humidity: [],
+          description: item.weather[0].description,
+          icon: item.weather[0].icon,
+          windSpeed: [],
+          clouds: [],
+          rain: 0,
+          snow: 0
+        };
+      }
+      
+      dailyData[date].temps.push(item.main.temp);
+      dailyData[date].humidity.push(item.main.humidity);
+      dailyData[date].windSpeed.push(item.wind.speed);
+      dailyData[date].clouds.push(item.clouds.all);
+      
+      if (item.rain && item.rain['3h']) {
+        dailyData[date].rain += item.rain['3h'];
+      }
+      if (item.snow && item.snow['3h']) {
+        dailyData[date].snow += item.snow['3h'];
+      }
+    });
+    
+    // 일별 데이터 정리
+    const dailyForecast = Object.keys(dailyData).slice(1, 6).map((dateKey, index) => {
+      const dayData = dailyData[dateKey];
+      const temps = dayData.temps;
+      
+      return {
+        date: new Date(dateKey),
+        temperature: {
+          min: Math.round(Math.min(...temps)),
+          max: Math.round(Math.max(...temps)),
+          avg: Math.round(temps.reduce((a, b) => a + b, 0) / temps.length)
+        },
+        description: dayData.description,
+        icon: dayData.icon,
+        humidity: Math.round(dayData.humidity.reduce((a, b) => a + b, 0) / dayData.humidity.length),
+        windSpeed: (dayData.windSpeed.reduce((a, b) => a + b, 0) / dayData.windSpeed.length).toFixed(1),
+        clouds: Math.round(dayData.clouds.reduce((a, b) => a + b, 0) / dayData.clouds.length),
+        precipitation: dayData.rain + dayData.snow,
+        isRealData: true
+      };
+    });
+    
     return dailyForecast;
+    
   } catch (error) {
     console.error('날씨 예보 가져오기 실패:', error);
     return getDummyForecastData();
   }
 };
 
-// 대기질 정보 시뮬레이션
+// 🌟 대기질 정보 (OpenWeather Air Pollution API)
 export const getAirQuality = async (lat, lng) => {
   try {
-    // 현재 시간과 계절을 고려한 대기질 시뮬레이션
-    const now = new Date();
-    const hour = now.getHours();
+    if (!checkAPIKey()) {
+      return getDummyAirQuality();
+    }
+
+    console.log('🌫️ 대기질 API 호출 중...');
     
-    // 출퇴근 시간대에는 대기질이 나빠지는 경향
-    let aqiBase = 2; // 기본적으로 좋음
-    if ((hour >= 7 && hour <= 9) || (hour >= 17 && hour <= 19)) {
-      aqiBase = 3; // 보통
+    // OpenWeather Air Pollution API
+    const airUrl = `https://api.openweathermap.org/data/2.5/air_pollution?lat=${lat}&lon=${lng}&appid=${OPENWEATHER_API_KEY}`;
+    
+    const response = await fetch(airUrl);
+    
+    if (!response.ok) {
+      console.error('대기질 API 오류:', response.status);
+      return getDummyAirQuality();
     }
     
-    const aqi = Math.min(5, aqiBase + Math.floor(Math.random() * 2));
+    const data = await response.json();
+    console.log('✅ 실제 대기질 데이터 수신:', data);
+    
+    const components = data.list[0].components;
+    const aqi = data.list[0].main.aqi;
     
     const getAQILevel = (aqi) => {
       switch(aqi) {
@@ -198,128 +245,221 @@ export const getAirQuality = async (lat, lng) => {
         case 3: return '보통';
         case 4: return '나쁨';
         case 5: return '매우 나쁨';
-        default: return '좋음';
+        default: return '알 수 없음';
       }
     };
     
     return {
       aqi: aqi,
       level: getAQILevel(aqi),
-      pm25: Math.round(5 + aqi * 8 + Math.random() * 10),
-      pm10: Math.round(15 + aqi * 12 + Math.random() * 15),
-      o3: Math.round(40 + Math.random() * 40),
-      no2: Math.round(10 + aqi * 5 + Math.random() * 10),
-      so2: Math.round(3 + Math.random() * 5),
-      co: Math.round(150 + aqi * 50 + Math.random() * 100)
+      pm25: Math.round(components.pm2_5),
+      pm10: Math.round(components.pm10),
+      o3: Math.round(components.o3),
+      no2: Math.round(components.no2),
+      so2: Math.round(components.so2),
+      co: Math.round(components.co / 100), // μg/m³를 mg/m³로
+      nh3: Math.round(components.nh3),
+      no: Math.round(components.no),
+      isRealData: true
     };
+    
   } catch (error) {
     console.error('대기질 정보 가져오기 실패:', error);
-    return {
-      aqi: 2,
-      level: '좋음',
-      pm25: 12,
-      pm10: 25,
-      o3: 60,
-      no2: 15,
-      so2: 5,
-      co: 200
-    };
+    return getDummyAirQuality();
   }
 };
 
-// 운동 추천 로직
+// 🌟 UV 지수 (OpenWeather UV API) - 별도 구독 필요
+export const getUVIndex = async (lat, lng) => {
+  try {
+    if (!checkAPIKey()) {
+      return getDummyUVIndex();
+    }
+
+    // UV API는 유료 플랜이 필요하므로 현재 날씨 기반으로 추정
+    const weather = await getCurrentWeather(lat, lng);
+    const hour = new Date().getHours();
+    
+    // 날씨와 시간대 기반 UV 추정
+    let uvIndex = 0;
+    
+    if (hour >= 10 && hour <= 16) {
+      if (weather.clouds < 30) {
+        uvIndex = 6 + Math.random() * 4; // 맑은 날 낮
+      } else if (weather.clouds < 70) {
+        uvIndex = 3 + Math.random() * 3; // 구름 조금
+      } else {
+        uvIndex = 1 + Math.random() * 2; // 흐림
+      }
+    } else if (hour >= 8 && hour <= 18) {
+      uvIndex = Math.random() * 3;
+    }
+    
+    return {
+      value: Math.round(uvIndex),
+      level: uvIndex < 3 ? '낮음' : uvIndex < 6 ? '보통' : uvIndex < 8 ? '높음' : '매우 높음'
+    };
+    
+  } catch (error) {
+    console.error('UV 지수 가져오기 실패:', error);
+    return getDummyUVIndex();
+  }
+};
+
+// 운동 추천 로직 (실제 데이터 기반)
 export const getExerciseRecommendation = (weatherData, airQualityData) => {
   const temp = weatherData.temperature;
   const humidity = weatherData.humidity;
   const windSpeed = weatherData.windSpeed;
   const description = weatherData.description.toLowerCase();
+  const weatherMain = weatherData.weatherMain?.toLowerCase() || '';
   const aqi = airQualityData.aqi;
   
   // 날씨 조건 확인
-  const isRaining = description.includes('비') || description.includes('rain');
-  const isSnowing = description.includes('눈') || description.includes('snow');
+  const isRaining = weatherMain.includes('rain') || description.includes('비');
+  const isSnowing = weatherMain.includes('snow') || description.includes('눈');
+  const isCloudy = weatherMain.includes('cloud') || description.includes('구름');
+  const isThunderstorm = weatherMain.includes('thunderstorm') || description.includes('천둥');
   const isExtremeCold = temp < -5;
   const isExtremeHot = temp > 35;
   const isHighWind = windSpeed > 10;
   const isPoorAirQuality = aqi >= 4;
   
-  if (isRaining || isSnowing) {
-    return {
+  // 세부 추천 생성
+  let recommendation = {
+    type: '',
+    recommendation: '',
+    reason: '',
+    icon: '',
+    color: '',
+    tips: [],
+    alternativeOptions: []
+  };
+  
+  if (isThunderstorm) {
+    recommendation = {
       type: '실내 운동',
       recommendation: '홈트레이닝',
-      reason: '우천으로 인한 실내 운동 권장',
-      icon: 'fas fa-home',
-      color: 'blue'
+      reason: '천둥번개로 인한 안전 문제',
+      icon: 'fas fa-bolt',
+      color: 'purple',
+      tips: ['절대 야외 운동 금지', '실내 운동으로 대체'],
+      alternativeOptions: ['홈트레이닝', '실내 체육관', '요가']
     };
-  }
-  
-  if (isPoorAirQuality) {
-    return {
-      type: '실내 운동',
-      recommendation: '실내 체육관',
-      reason: '대기질 불량으로 실내 운동 권장',
-      icon: 'fas fa-dumbbell',
-      color: 'red'
-    };
-  }
-  
-  if (isExtremeCold) {
-    return {
+  } else if (isRaining) {
+    recommendation = {
       type: '실내 운동',
       recommendation: '실내 러닝머신',
-      reason: '극한 추위로 인한 실내 운동 권장',
-      icon: 'fas fa-running',
-      color: 'blue'
+      reason: `비가 오고 있습니다 (${weatherData.description})`,
+      icon: 'fas fa-cloud-rain',
+      color: 'blue',
+      tips: ['미끄러운 노면 주의', '실내 운동 권장'],
+      alternativeOptions: ['러닝머신', '실내 자전거', '근력 운동']
     };
-  }
-  
-  if (isExtremeHot) {
-    return {
-      type: '이른 아침/늦은 저녁 운동',
-      recommendation: '새벽/저녁 러닝',
-      reason: '폭염으로 인한 시간대 조정 권장',
-      icon: 'fas fa-moon',
-      color: 'orange'
-    };
-  }
-  
-  if (isHighWind) {
-    return {
+  } else if (isSnowing) {
+    recommendation = {
       type: '실내 운동',
-      recommendation: '요가/필라테스',
-      reason: '강풍으로 인한 실내 운동 권장',
-      icon: 'fas fa-spa',
-      color: 'purple'
+      recommendation: '실내 체육관',
+      reason: `눈이 오고 있습니다 (${weatherData.description})`,
+      icon: 'fas fa-snowflake',
+      color: 'lightblue',
+      tips: ['빙판길 주의', '보온 장비 필수'],
+      alternativeOptions: ['실내 체육관', '수영장', '홈트레이닝']
     };
-  }
-  
-  // 좋은 날씨 조건
-  if (temp >= 15 && temp <= 25 && humidity < 70 && aqi <= 3) {
-    return {
+  } else if (isPoorAirQuality) {
+    recommendation = {
+      type: '실내 운동',
+      recommendation: '실내 체육관',
+      reason: `대기질 ${airQualityData.level} (PM2.5: ${airQualityData.pm25})`,
+      icon: 'fas fa-smog',
+      color: 'gray',
+      tips: ['마스크 착용 필수', '실내 운동 강력 권장'],
+      alternativeOptions: ['필터 있는 실내 체육관', '홈트레이닝']
+    };
+  } else if (isExtremeCold) {
+    recommendation = {
+      type: '실내 운동',
+      recommendation: '실내 러닝머신',
+      reason: `극한 추위 (${temp}°C)`,
+      icon: 'fas fa-temperature-low',
+      color: 'blue',
+      tips: ['체온 유지 중요', '충분한 준비운동'],
+      alternativeOptions: ['실내 러닝', '홈트레이닝', '온수 수영장']
+    };
+  } else if (isExtremeHot) {
+    recommendation = {
+      type: '이른 아침/늦은 저녁',
+      recommendation: '새벽/저녁 러닝',
+      reason: `폭염 주의 (${temp}°C)`,
+      icon: 'fas fa-temperature-high',
+      color: 'red',
+      tips: ['충분한 수분 섭취', '그늘진 코스 선택', '10-15분마다 휴식'],
+      alternativeOptions: ['새벽 5-7시', '저녁 7-9시', '실내 운동']
+    };
+  } else if (isHighWind) {
+    recommendation = {
+      type: '실내 운동',
+      recommendation: '실내 운동',
+      reason: `강풍 주의 (${windSpeed}m/s)`,
+      icon: 'fas fa-wind',
+      color: 'teal',
+      tips: ['균형 유지 어려움', '날림 물체 주의'],
+      alternativeOptions: ['실내 트랙', '홈트레이닝']
+    };
+  } else if (temp >= 15 && temp <= 25 && humidity < 70 && aqi <= 2) {
+    recommendation = {
       type: '야외 운동',
       recommendation: '러닝/사이클링',
-      reason: '운동하기 완벽한 날씨입니다!',
-      icon: 'fas fa-running',
-      color: 'green'
+      reason: '완벽한 운동 날씨입니다! 🌟',
+      icon: 'fas fa-sun',
+      color: 'green',
+      tips: ['최적의 컨디션', '장거리 운동 추천', '야외 활동 적극 권장'],
+      alternativeOptions: ['러닝', '사이클링', '등산', '야외 운동']
+    };
+  } else if (temp >= 10 && temp < 15) {
+    recommendation = {
+      type: '야외 운동',
+      recommendation: '가벼운 러닝',
+      reason: '선선한 운동하기 좋은 날씨',
+      icon: 'fas fa-cloud-sun',
+      color: 'lightgreen',
+      tips: ['얇은 겉옷 준비', '준비운동 충분히'],
+      alternativeOptions: ['조깅', '빠른 걷기', '자전거']
+    };
+  } else if (isCloudy && !isRaining) {
+    recommendation = {
+      type: '야외 운동',
+      recommendation: '러닝/걷기',
+      reason: '흐리지만 운동하기 적합',
+      icon: 'fas fa-cloud',
+      color: 'gray',
+      tips: ['자외선 차단', '시원한 날씨 활용'],
+      alternativeOptions: ['러닝', '하이킹', '야외 운동']
+    };
+  } else {
+    recommendation = {
+      type: '가벼운 야외 운동',
+      recommendation: '걷기/조깅',
+      reason: '적당한 야외 활동 가능',
+      icon: 'fas fa-walking',
+      color: 'blue',
+      tips: ['날씨 변화 주의', '적절한 운동 강도 유지'],
+      alternativeOptions: ['걷기', '가벼운 조깅', '스트레칭']
     };
   }
   
-  // 일반적인 경우
-  return {
-    type: '가벼운 야외 운동',
-    recommendation: '걷기/조깅',
-    reason: '적당한 야외 활동이 가능합니다',
-    icon: 'fas fa-walking',
-    color: 'blue'
-  };
+  // 실제 데이터 플래그 추가
+  recommendation.isRealData = weatherData.isRealData || false;
+  
+  return recommendation;
 };
 
-// 더미 데이터 (백업용)
+// 더미 데이터 (API 실패 시 백업)
 const getDummyWeatherData = () => ({
   temperature: 22,
   feelsLike: 24,
   humidity: 65,
-  description: '맑음',
+  description: '맑음 (더미 데이터)',
   icon: '01d',
   windSpeed: 3.2,
   windDirection: 180,
@@ -329,7 +469,9 @@ const getDummyWeatherData = () => ({
   sunrise: new Date(),
   sunset: new Date(),
   cityName: '서울',
-  uvIndex: 5
+  uvIndex: 5,
+  weatherMain: 'Clear',
+  isRealData: false
 });
 
 const getDummyForecastData = () => {
@@ -341,20 +483,41 @@ const getDummyForecastData = () => {
       date: new Date(today.getTime() + (i * 24 * 60 * 60 * 1000)),
       temperature: { 
         min: Math.round(15 + Math.random() * 5), 
-        max: Math.round(20 + Math.random() * 8) 
+        max: Math.round(20 + Math.random() * 8),
+        avg: Math.round(17 + Math.random() * 6)
       },
-      description: ['맑음', '구름 조금', '흐림', '소나기'][Math.floor(Math.random() * 4)],
+      description: '더미 데이터',
       icon: '01d',
       humidity: Math.round(50 + Math.random() * 30),
       windSpeed: Math.round((Math.random() * 5 + 1) * 10) / 10,
-      clouds: Math.round(Math.random() * 60)
+      clouds: Math.round(Math.random() * 60),
+      precipitation: 0,
+      isRealData: false
     });
   }
   
   return forecast;
 };
 
-// 아이콘 매핑 함수 (export)
+const getDummyAirQuality = () => ({
+  aqi: 2,
+  level: '좋음 (더미)',
+  pm25: 12,
+  pm10: 25,
+  o3: 60,
+  no2: 15,
+  so2: 5,
+  co: 2,
+  isRealData: false
+});
+
+const getDummyUVIndex = () => ({
+  value: 5,
+  level: '보통 (추정치)',
+  isRealData: false
+});
+
+// 아이콘 매핑 함수
 export const getWeatherIconClass = (iconCode) => {
   const iconMap = {
     '01d': 'fas fa-sun text-yellow-500',
@@ -379,12 +542,21 @@ export const getWeatherIconClass = (iconCode) => {
   return iconMap[iconCode] || 'fas fa-sun text-yellow-500';
 };
 
+// OpenWeather 아이콘 URL 생성
+export const getWeatherIconUrl = (iconCode) => {
+  return `https://openweathermap.org/img/wn/${iconCode}@2x.png`;
+};
+
 // 호환성을 위한 기존 함수들
 export const getWeatherData = getCurrentWeather;
 export const getWeatherIcon = getWeatherIconClass;
 
 export const isGoodWeatherForRunning = (weather) => {
-  return weather.temperature >= 15 && weather.temperature <= 25 && weather.humidity < 70;
+  return weather.temperature >= 15 && 
+         weather.temperature <= 25 && 
+         weather.humidity < 70 &&
+         !weather.description.includes('비') &&
+         !weather.description.includes('눈');
 };
 
 export const getWeatherRecommendation = (weather) => {
@@ -392,15 +564,47 @@ export const getWeatherRecommendation = (weather) => {
   return {
     status: good ? 'excellent' : 'caution',
     message: good ? '운동하기 좋은 날씨입니다!' : '운동 시 주의하세요',
-    tips: good ? ['충분한 수분 섭취'] : ['날씨를 확인하세요']
+    tips: good ? ['충분한 수분 섭취'] : ['날씨를 확인하세요'],
+    isRealData: weather.isRealData || false
   };
 };
 
-// Google Maps 관련 함수들 (호환성 유지)
-export const initializeWeatherLayer = () => {
-  console.log('Weather layer initialized (simulated)');
+// 날씨 데이터 초기화 (앱 시작 시)
+export const initializeWeatherService = () => {
+  if (checkAPIKey()) {
+    console.log('✅ OpenWeather API 준비 완료!');
+    return true;
+  } else {
+    console.log('⚠️ OpenWeather API 키 설정 필요');
+    return false;
+  }
 };
 
-export const toggleWeatherLayer = () => {
-  console.log('Weather layer toggled (simulated)');
+// 디버그용 - API 상태 확인
+export const checkWeatherAPIStatus = async () => {
+  console.log('🔍 Weather API 상태 확인...');
+  console.log('API Key 설정:', checkAPIKey() ? '✅' : '❌');
+  
+  if (checkAPIKey()) {
+    try {
+      // 서울 좌표로 테스트
+      const testLat = 37.5665;
+      const testLng = 126.9780;
+      const weather = await getCurrentWeather(testLat, testLng);
+      
+      if (weather.isRealData) {
+        console.log('✅ API 연결 성공!');
+        console.log('현재 서울 날씨:', weather.description, weather.temperature + '°C');
+        return true;
+      } else {
+        console.log('⚠️ 더미 데이터 사용 중');
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ API 테스트 실패:', error);
+      return false;
+    }
+  }
+  
+  return false;
 };

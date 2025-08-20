@@ -4,6 +4,11 @@ import './App.css';
 
 // Google Maps API 로더
 import { loadGoogleMapsAPI } from './utils/googleMapsLoader';
+// 카카오 지도 API 로더
+import { loadKakaoMapAPI } from './utils/kakaoMapLoader';
+
+// 날씨 서비스
+import { initializeWeatherService, checkWeatherAPIStatus } from './services/weatherService';
 
 // 컴포넌트 imports
 import Header from './components/Header';
@@ -16,6 +21,9 @@ import RealTimeMonitoring from './pages/RealTimeMonitoring';
 import WeatherInfo from './pages/WeatherInfo';
 import Profile from './pages/Profile';
 import Login from './pages/Login';
+import ExerciseTracking from './pages/ExerciseTracking';
+import ExerciseResult from './pages/ExerciseResult';
+import WorkoutStats from './pages/WorkoutStats';
 
 // 인증이 필요한 라우트를 위한 래퍼 컴포넌트
 function ProtectedRoute({ children }) {
@@ -129,6 +137,9 @@ function AppContent() {
             } 
           />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/exercise-tracking" element={<ExerciseTracking />} />
+          <Route path="/exercise-result" element={<ExerciseResult />} />
+          <Route path="/stats" element={<WorkoutStats />} />
           <Route path="*" element={<Navigate to="/dashboard" />} />
         </Routes>
       </main>
@@ -141,8 +152,9 @@ function App() {
   const [mapsLoading, setMapsLoading] = useState(true);
   const [mapsError, setMapsError] = useState(null);
 
-  // Google Maps API 로드
+  // Google Maps API 로드 및 날씨 서비스 초기화
   useEffect(() => {
+    // Google Maps API 로드
     loadGoogleMapsAPI()
       .then(() => {
         console.log('✅ Google Maps API 로드 성공');
@@ -153,6 +165,32 @@ function App() {
         setMapsError(error.message);
         setMapsLoading(false);
       });
+    
+    // 카카오 지도 API 로드
+    loadKakaoMapAPI()
+      .then(() => {
+        console.log('✅ 카카오 지도 API 로드 성공');
+      })
+      .catch((error) => {
+        console.error('❌ 카카오 지도 API 로드 실패:', error);
+      });
+    
+    // 날씨 서비스 초기화
+    const initWeather = async () => {
+      const weatherReady = initializeWeatherService();
+      if (weatherReady) {
+        console.log('🌤️ 날씨 서비스 초기화 성공');
+        const apiStatus = await checkWeatherAPIStatus();
+        if (apiStatus) {
+          console.log('✅ OpenWeather API 연결 확인!');
+        }
+      } else {
+        console.log('⚠️ OpenWeather API 키 설정 필요');
+        console.log('👉 .env.local 파일에 REACT_APP_OPENWEATHER_API_KEY 추가');
+      }
+    };
+    
+    initWeather();
   }, []);
 
   // Google Maps 로딩 중일 때 로딩 화면 표시
