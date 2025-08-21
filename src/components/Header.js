@@ -10,6 +10,7 @@ function Header({ currentScreen, changeScreen }) {
     { id: 'dashboard', label: '대시보드', icon: 'fas fa-home', path: '/dashboard' },
     { id: 'courses', label: '코스 추천', icon: 'fas fa-route', path: '/courses' },
     { id: 'monitoring', label: '실시간 모니터링', icon: 'fas fa-heartbeat', path: '/monitoring' },
+    { id: 'stats', label: '통계', icon: 'fas fa-chart-bar', path: '/stats' },
     { id: 'weather', label: '날씨 정보', icon: 'fas fa-cloud-sun', path: '/weather' },
     { id: 'profile', label: '프로필', icon: 'fas fa-user', path: '/profile' }
   ];
@@ -23,9 +24,12 @@ function Header({ currentScreen, changeScreen }) {
   };
 
   const handleMenuClick = (itemId) => {
-    changeScreen(itemId);
-    // React Router를 사용하는 경우 history.push를 사용할 수 있지만
-    // 현재는 state로 화면을 관리하므로 changeScreen만 사용
+    // 통계 페이지는 직접 라우팅
+    if (itemId === 'stats') {
+      window.location.href = '/stats';
+    } else {
+      changeScreen(itemId);
+    }
   };
 
   return (

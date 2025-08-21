@@ -1,6 +1,9 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 
 function CourseCard({ course }) {
+  const navigate = useNavigate();
+  
   // 난이도에 따른 배지 색상 설정
   const difficultyColors = {
     '초급자': 'bg-green-100 text-green-800',
@@ -23,6 +26,103 @@ function CourseCard({ course }) {
     status: '맑음',
     temperature: '22°C',
     airQuality: '좋음'
+  };
+
+  // 코스 경로 생성 함수
+  const generateCoursePath = (course) => {
+    // 이미 path가 있으면 그대로 사용
+    if (course.path && course.path.length > 0) {
+      return course.path;
+    }
+
+    // location이 있으면 이를 기반으로 경로 생성
+    if (course.location) {
+      const baseLat = course.location.lat;
+      const baseLng = course.location.lng;
+      
+      // 거리에 따라 경로 포인트 수 결정
+      const distance = course.distance || 1; // km
+      const numPoints = Math.max(10, Math.floor(distance * 5)); // 최소 10개 포인트
+      
+      // 코스 타입에 따른 경로 패턴 생성
+      const path = [];
+      for (let i = 0; i < numPoints; i++) {
+        const progress = i / (numPoints - 1);
+        let lat, lng;
+        
+        // 코스 타입에 따라 다른 경로 패턴 생성
+        if (course.name?.includes('해안') || course.name?.includes('강변')) {
+          // 해안/강변: 일직선에 가까운 경로
+          lat = baseLat + (distance * 0.005 * progress);
+          lng = baseLng + (distance * 0.002 * Math.sin(progress * Math.PI));
+        } else if (course.name?.includes('공원')) {
+          // 공원: 원형 경로
+          const angle = progress * Math.PI * 2;
+          lat = baseLat + (distance * 0.003 * Math.cos(angle));
+          lng = baseLng + (distance * 0.003 * Math.sin(angle));
+        } else {
+          // 일반 도로: 지그재그 경로
+          lat = baseLat + (distance * 0.005 * progress);
+          lng = baseLng + (distance * 0.003 * Math.sin(progress * Math.PI * 2));
+        }
+        
+        path.push({ lat, lng });
+      }
+      
+      return path;
+    }
+
+    // location도 없으면 기본 위치 사용 (서울시청 기준)
+    const defaultLat = 37.5665;
+    const defaultLng = 126.9780;
+    const distance = course.distance || 1;
+    const numPoints = Math.max(10, Math.floor(distance * 5));
+    
+    const path = [];
+    for (let i = 0; i < numPoints; i++) {
+      const progress = i / (numPoints - 1);
+      path.push({
+        lat: defaultLat + (distance * 0.005 * progress),
+        lng: defaultLng + (distance * 0.003 * Math.sin(progress * Math.PI * 2))
+      });
+    }
+    
+    return path;
+  };
+
+  // 코스 시작 핸들러
+  const handleStartCourse = () => {
+    console.log('코스 시작:', course.name);
+    
+    // 경로 생성
+    const coursePath = generateCoursePath(course);
+    
+    // route 객체 생성
+    const route = {
+      path: coursePath,
+      distance: (course.distance || 1) * 1000, // km를 m로 변환
+      name: course.name || '기본 코스',
+      difficulty: course.difficulty || 'beginner',
+      description: course.description || '러닝 코스',
+      estimatedTime: course.estimatedTime || '30분',
+      elevation: course.elevation || 10,
+      type: course.type || 'running'
+    };
+    
+    console.log('생성된 경로:', {
+      name: route.name,
+      pathLength: route.path.length,
+      distance: route.distance
+    });
+    
+    // ExerciseTracking 페이지로 이동
+    navigate('/exercise-tracking', { 
+      state: { 
+        route: route, 
+        exerciseType: 'running',
+        courseInfo: course 
+      } 
+    });
   };
 
   return (
@@ -104,7 +204,9 @@ function CourseCard({ course }) {
           <button className="bg-white border border-blue-500 text-blue-500 px-4 py-2 rounded-md hover:bg-blue-50 transition duration-300">
             상세 정보
           </button>
-          <button className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition duration-300">
+          <button 
+            onClick={handleStartCourse}
+            className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition duration-300">
             코스 시작하기
           </button>
         </div>

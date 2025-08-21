@@ -20,24 +20,7 @@
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Google Maps API -->
-    <script>
-      // 환경변수에서 Google Maps API 키 가져오기
-      window.GOOGLE_MAPS_API_KEY = '%REACT_APP_GOOGLE_MAPS_API_KEY%';
-    </script>
-    <script async defer
-      src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBjBbY2L-riXTcbFWDfkSZtJFxsCOhm0PU&libraries=places,geometry&callback=initGoogleMaps">
-    </script>
-    
-    <script>
-      // Google Maps 초기화 콜백
-      window.initGoogleMaps = function() {
-        console.log('Google Maps API 로드 완료');
-        window.googleMapsLoaded = true;
-        // React 앱에 Google Maps가 로드되었음을 알림
-        window.dispatchEvent(new Event('google-maps-loaded'));
-      };
-    </script>
+    <!-- Google Maps API는 App.js에서 동적으로 로드됩니다 -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">

@@ -1,9 +1,15 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../components/AuthProvider';
+import { getUserStats, getWeeklyStats } from '../services/workoutService';
+import { saveWeeklyWorkoutsToLocal, getWeeklyWorkouts, calculateWeeklyStats } from '../services/dummyDataService';
 
 function Dashboard({ userLocation, weatherData, setWeatherData, changeScreen }) {
+  const navigate = useNavigate();
   const { currentUser } = useAuth();
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [userStats, setUserStats] = useState(null);
+  const [weeklyStats, setWeeklyStats] = useState(null);
 
   // 실시간 시계 업데이트
   useEffect(() => {
@@ -31,6 +37,24 @@ function Dashboard({ userLocation, weatherData, setWeatherData, changeScreen }) 
     }
   }, [userLocation, weatherData, setWeatherData]);
 
+  // 통계 데이터 로드
+  useEffect(() => {
+    loadStats();
+  }, []);
+
+  const loadStats = async () => {
+    try {
+      const [stats, weekly] = await Promise.all([
+        getUserStats(),
+        getWeeklyStats()
+      ]);
+      setUserStats(stats);
+      setWeeklyStats(weekly);
+    } catch (error) {
+      console.error('통계 로드 실패:', error);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* 환영 메시지 */}
@@ -46,7 +70,9 @@ function Dashboard({ userLocation, weatherData, setWeatherData, changeScreen }) 
             </p>
           </div>
           <div className="text-right">
-            <div className="text-3xl font-bold">0km</div>
+            <div className="text-3xl font-bold">
+              {((userStats?.totalDistance || 0) / 1000).toFixed(1)}km
+            </div>
             <div className="text-blue-200">오늘 운동 거리</div>
           </div>
         </div>
@@ -115,138 +141,285 @@ function Dashboard({ userLocation, weatherData, setWeatherData, changeScreen }) 
         </div>
       </div>
 
-      {/* 운동 시작 카드 */}
+      {/* 빠른 운동 시작 카드 */}
       <div className="bg-white rounded-lg shadow-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-700 mb-4">운동 시작하기</h3>
+        <h3 className="text-lg font-semibold text-gray-700 mb-4">🚀 빠른 운동 시작</h3>
         
-        <div className="text-center py-8">
-          <div className="mb-4">
-            <i className="fas fa-play-circle text-6xl text-blue-500"></i>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* 자유 러닝 */}
+          <div className="border-2 border-blue-200 rounded-lg p-4 hover:border-blue-500 transition-colors">
+            <div className="text-center">
+              <div className="text-4xl mb-2">🏃‍♂️</div>
+              <h4 className="font-semibold text-gray-800 mb-2">자유 러닝</h4>
+              <p className="text-gray-600 text-sm mb-4">
+                GPS로 경로를 추적하며<br/>자유롭게 달리기
+              </p>
+              <button 
+                onClick={() => navigate('/exercise-tracking', {
+                  state: { exerciseType: 'running', route: null }
+                })}
+                className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-lg transition-colors"
+              >
+                시작하기
+              </button>
+            </div>
           </div>
-          <h4 className="text-xl font-semibold text-gray-800 mb-2">첫 운동을 시작해보세요!</h4>
-          <p className="text-gray-600 mb-6">
-            운동을 시작하면 실시간으로 기록을 추적하고<br/>
-            맞춤형 피드백을 받을 수 있습니다.
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-md mx-auto">
-            <button 
-              onClick={() => changeScreen && changeScreen('monitoring')}
-              className="bg-blue-500 hover:bg-blue-600 text-white py-3 px-6 rounded-lg transition-colors flex items-center justify-center"
-            >
-              <i className="fas fa-running mr-2"></i>
-              러닝 시작
-            </button>
-            <button 
-              onClick={() => changeScreen && changeScreen('monitoring')}
-              className="bg-green-500 hover:bg-green-600 text-white py-3 px-6 rounded-lg transition-colors flex items-center justify-center"
-            >
-              <i className="fas fa-bicycle mr-2"></i>
-              자전거 시작
-            </button>
+
+          {/* 자유 사이클링 */}
+          <div className="border-2 border-green-200 rounded-lg p-4 hover:border-green-500 transition-colors">
+            <div className="text-center">
+              <div className="text-4xl mb-2">🚴‍♀️</div>
+              <h4 className="font-semibold text-gray-800 mb-2">자유 사이클링</h4>
+              <p className="text-gray-600 text-sm mb-4">
+                GPS로 경로를 추적하며<br/>자유롭게 자전거 타기
+              </p>
+              <button 
+                onClick={() => navigate('/exercise-tracking', {
+                  state: { exerciseType: 'cycling', route: null }
+                })}
+                className="w-full bg-green-500 hover:bg-green-600 text-white py-2 rounded-lg transition-colors"
+              >
+                시작하기
+              </button>
+            </div>
           </div>
+
+          {/* 코스 선택 */}
+          <div className="border-2 border-purple-200 rounded-lg p-4 hover:border-purple-500 transition-colors">
+            <div className="text-center">
+              <div className="text-4xl mb-2">🗺️</div>
+              <h4 className="font-semibold text-gray-800 mb-2">코스 운동</h4>
+              <p className="text-gray-600 text-sm mb-4">
+                추천 코스를 선택하고<br/>네비게이션 받기
+              </p>
+              <button 
+                onClick={() => changeScreen && changeScreen('courses')}
+                className="w-full bg-purple-500 hover:bg-purple-600 text-white py-2 rounded-lg transition-colors"
+              >
+                코스 선택
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 운동 통계 */}
+      <div className="bg-white rounded-lg shadow-lg p-6">
+        <h3 className="text-lg font-semibold text-gray-700 mb-4">📊 이번 주 운동 통계</h3>
+        
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="text-center p-4 bg-blue-50 rounded-lg">
+            <div className="text-3xl font-bold text-blue-600">
+              {weeklyStats?.weeklyTotal?.workouts || 0}
+            </div>
+            <div className="text-gray-600 text-sm">운동 횟수</div>
+          </div>
+          <div className="text-center p-4 bg-green-50 rounded-lg">
+            <div className="text-3xl font-bold text-green-600">
+              {((weeklyStats?.weeklyTotal?.distance || 0) / 1000).toFixed(1)}km
+            </div>
+            <div className="text-gray-600 text-sm">총 거리</div>
+          </div>
+          <div className="text-center p-4 bg-orange-50 rounded-lg">
+            <div className="text-3xl font-bold text-orange-600">
+              {weeklyStats?.weeklyTotal?.calories || 0}
+            </div>
+            <div className="text-gray-600 text-sm">칼로리</div>
+          </div>
+          <div className="text-center p-4 bg-purple-50 rounded-lg">
+            <div className="text-3xl font-bold text-purple-600">
+              {Math.round((weeklyStats?.weeklyTotal?.time || 0) / 60)}분
+            </div>
+            <div className="text-gray-600 text-sm">운동 시간</div>
+          </div>
+        </div>
+
+        <div className="mt-4 text-center">
+          {weeklyStats?.weeklyTotal?.workouts > 0 ? (
+            <>
+              <p className="text-gray-600 text-sm mb-2">
+                이번 주 {weeklyStats.weeklyTotal.workouts}회 운동하셨습니다!
+              </p>
+              <button 
+                onClick={() => window.location.href = '/stats'}
+                className="text-blue-500 hover:text-blue-700 text-sm font-medium"
+              >
+                자세한 통계 보기 →
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-gray-600 text-sm mb-2">아직 이번 주 운동 기록이 없습니다</p>
+              <button 
+                onClick={() => navigate('/exercise-tracking', {
+                  state: { exerciseType: 'running', route: null }
+                })}
+                className="text-blue-500 hover:text-blue-700 text-sm font-medium"
+              >
+                첫 운동 시작하기 →
+              </button>
+            </>
+          )}
         </div>
       </div>
 
       {/* 목표 설정 카드 */}
       <div className="bg-white rounded-lg shadow-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-700 mb-4">목표 설정</h3>
+        <h3 className="text-lg font-semibold text-gray-700 mb-4">🎯 목표 설정</h3>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="text-center p-4 bg-gray-50 rounded-lg">
-            <i className="fas fa-target text-2xl text-blue-500 mb-2"></i>
+            <i className="fas fa-calendar-check text-3xl text-blue-500 mb-2"></i>
             <h4 className="font-semibold text-gray-800">주간 목표</h4>
-            <p className="text-gray-600 text-sm">주당 운동 횟수를 설정하세요</p>
-            <button 
-              onClick={() => changeScreen && changeScreen('profile')}
-              className="mt-2 text-blue-500 hover:text-blue-700 text-sm"
-            >
-              설정하기
-            </button>
+            <p className="text-gray-600 text-sm">주 3회 운동</p>
+            <div className="mt-2">
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className="bg-blue-600 h-2 rounded-full" style={{ width: '0%' }}></div>
+              </div>
+              <span className="text-xs text-gray-500">0/3 완료</span>
+            </div>
           </div>
           
           <div className="text-center p-4 bg-gray-50 rounded-lg">
-            <i className="fas fa-route text-2xl text-green-500 mb-2"></i>
+            <i className="fas fa-route text-3xl text-green-500 mb-2"></i>
             <h4 className="font-semibold text-gray-800">거리 목표</h4>
-            <p className="text-gray-600 text-sm">일일 운동 거리를 설정하세요</p>
-            <button 
-              onClick={() => changeScreen && changeScreen('profile')}
-              className="mt-2 text-green-500 hover:text-green-700 text-sm"
-            >
-              설정하기
-            </button>
+            <p className="text-gray-600 text-sm">일 5km</p>
+            <div className="mt-2">
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className="bg-green-600 h-2 rounded-full" style={{ width: '0%' }}></div>
+              </div>
+              <span className="text-xs text-gray-500">0/5 km</span>
+            </div>
           </div>
           
           <div className="text-center p-4 bg-gray-50 rounded-lg">
-            <i className="fas fa-fire text-2xl text-orange-500 mb-2"></i>
+            <i className="fas fa-fire text-3xl text-orange-500 mb-2"></i>
             <h4 className="font-semibold text-gray-800">칼로리 목표</h4>
-            <p className="text-gray-600 text-sm">일일 칼로리 소모 목표를 설정하세요</p>
-            <button 
-              onClick={() => changeScreen && changeScreen('profile')}
-              className="mt-2 text-orange-500 hover:text-orange-700 text-sm"
-            >
-              설정하기
-            </button>
+            <p className="text-gray-600 text-sm">일 500kcal</p>
+            <div className="mt-2">
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className="bg-orange-600 h-2 rounded-full" style={{ width: '0%' }}></div>
+              </div>
+              <span className="text-xs text-gray-500">0/500 kcal</span>
+            </div>
           </div>
         </div>
+
+        <button 
+          onClick={() => changeScreen && changeScreen('profile')}
+          className="w-full mt-4 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg transition-colors"
+        >
+          목표 수정하기
+        </button>
       </div>
 
       {/* 빠른 실행 버튼들 */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <button 
           onClick={() => changeScreen && changeScreen('courses')}
-          className="bg-blue-500 hover:bg-blue-600 text-white p-4 rounded-lg transition-colors flex items-center justify-center"
+          className="bg-blue-500 hover:bg-blue-600 text-white p-4 rounded-lg transition-colors flex flex-col items-center justify-center"
         >
-          <i className="fas fa-route mr-2"></i>
-          코스 찾기
+          <i className="fas fa-map-marked-alt text-2xl mb-2"></i>
+          <span>코스 추천</span>
         </button>
         <button 
           onClick={() => changeScreen && changeScreen('monitoring')}
-          className="bg-green-500 hover:bg-green-600 text-white p-4 rounded-lg transition-colors flex items-center justify-center"
+          className="bg-green-500 hover:bg-green-600 text-white p-4 rounded-lg transition-colors flex flex-col items-center justify-center"
         >
-          <i className="fas fa-heartbeat mr-2"></i>
-          실시간 모니터링
+          <i className="fas fa-heartbeat text-2xl mb-2"></i>
+          <span>실시간 모니터</span>
         </button>
         <button 
           onClick={() => changeScreen && changeScreen('weather')}
-          className="bg-purple-500 hover:bg-purple-600 text-white p-4 rounded-lg transition-colors flex items-center justify-center"
+          className="bg-purple-500 hover:bg-purple-600 text-white p-4 rounded-lg transition-colors flex flex-col items-center justify-center"
         >
-          <i className="fas fa-cloud-sun mr-2"></i>
-          날씨 정보
+          <i className="fas fa-cloud-sun text-2xl mb-2"></i>
+          <span>날씨 정보</span>
         </button>
         <button 
           onClick={() => changeScreen && changeScreen('profile')}
-          className="bg-orange-500 hover:bg-orange-600 text-white p-4 rounded-lg transition-colors flex items-center justify-center"
+          className="bg-orange-500 hover:bg-orange-600 text-white p-4 rounded-lg transition-colors flex flex-col items-center justify-center"
         >
-          <i className="fas fa-user mr-2"></i>
-          프로필 설정
+          <i className="fas fa-user-cog text-2xl mb-2"></i>
+          <span>프로필</span>
         </button>
       </div>
 
-      {/* 앱 소개 */}
+      {/* 테스트 데이터 생성 섹션 */}
+      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+        <h3 className="text-lg font-semibold text-gray-800 mb-3">
+          🧪 테스트 데이터 생성
+        </h3>
+        <p className="text-sm text-gray-600 mb-4">
+          일주일치 운동 기록 더미 데이터를 생성하여 통계 기능을 테스트할 수 있습니다.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button
+            onClick={() => {
+              const workouts = saveWeeklyWorkoutsToLocal();
+              alert(`✅ ${workouts.length}개의 운동 기록이 생성되었습니다!\n\n통계 페이지에서 확인해보세요.`);
+              // 통계 업데이트
+              const stats = calculateWeeklyStats(workouts);
+              console.log('생성된 통계:', stats);
+            }}
+            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
+          >
+            <i className="fas fa-database mr-2"></i>
+            일주일 운동 기록 생성
+          </button>
+          <button
+            onClick={async () => {
+              const workouts = await getWeeklyWorkouts('local');
+              navigate('/exercise-result', { 
+                state: { 
+                  result: workouts[0] || null,
+                  weeklyWorkouts: workouts 
+                } 
+              });
+            }}
+            className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors"
+          >
+            <i className="fas fa-chart-line mr-2"></i>
+            운동 결과 보기
+          </button>
+          <button
+            onClick={() => navigate('/stats')}
+            className="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg transition-colors"
+          >
+            <i className="fas fa-chart-bar mr-2"></i>
+            통계 페이지로 이동
+          </button>
+        </div>
+        <div className="mt-3 text-xs text-gray-500">
+          💡 Tip: 생성된 데이터는 브라우저 로컬 스토리지에 저장됩니다.
+        </div>
+      </div>
+
+      {/* 앱 특징 소개 */}
       <div className="bg-gradient-to-r from-gray-100 to-gray-200 rounded-lg p-6">
         <h3 className="text-lg font-semibold text-gray-800 mb-4 text-center">
-          스마트 러닝 & 바이크 코치 주요 기능
+          💡 스마트 코치 주요 기능
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="text-center">
-            <i className="fas fa-map-marked-alt text-3xl text-blue-500 mb-2"></i>
-            <h4 className="font-semibold text-gray-800 text-sm">맞춤 코스 추천</h4>
-            <p className="text-gray-600 text-xs">난이도와 날씨를 고려한 최적의 운동 코스</p>
+          <div className="bg-white rounded-lg p-4 text-center">
+            <i className="fas fa-location-arrow text-3xl text-blue-500 mb-2"></i>
+            <h4 className="font-semibold text-gray-800 text-sm mb-1">GPS 트래킹</h4>
+            <p className="text-gray-600 text-xs">실시간 위치 추적과 경로 기록</p>
           </div>
-          <div className="text-center">
+          <div className="bg-white rounded-lg p-4 text-center">
             <i className="fas fa-robot text-3xl text-green-500 mb-2"></i>
-            <h4 className="font-semibold text-gray-800 text-sm">AI 운동 코치</h4>
-            <p className="text-gray-600 text-xs">실시간 피드백과 맞춤형 운동 가이드</p>
+            <h4 className="font-semibold text-gray-800 text-sm mb-1">AI 코칭</h4>
+            <p className="text-gray-600 text-xs">개인 맞춤형 운동 피드백</p>
           </div>
-          <div className="text-center">
-            <i className="fas fa-cloud-sun text-3xl text-yellow-500 mb-2"></i>
-            <h4 className="font-semibold text-gray-800 text-sm">날씨 연동</h4>
-            <p className="text-gray-600 text-xs">실시간 날씨와 대기질 기반 운동 추천</p>
+          <div className="bg-white rounded-lg p-4 text-center">
+            <i className="fas fa-trophy text-3xl text-yellow-500 mb-2"></i>
+            <h4 className="font-semibold text-gray-800 text-sm mb-1">업적 시스템</h4>
+            <p className="text-gray-600 text-xs">목표 달성과 동기부여</p>
           </div>
-          <div className="text-center">
+          <div className="bg-white rounded-lg p-4 text-center">
             <i className="fas fa-chart-line text-3xl text-purple-500 mb-2"></i>
-            <h4 className="font-semibold text-gray-800 text-sm">운동 기록 분석</h4>
-            <p className="text-gray-600 text-xs">상세한 운동 데이터 분석과 통계</p>
+            <h4 className="font-semibold text-gray-800 text-sm mb-1">상세 분석</h4>
+            <p className="text-gray-600 text-xs">운동 데이터 통계와 분석</p>
           </div>
         </div>
       </div>
