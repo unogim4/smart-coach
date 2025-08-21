@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../components/AuthProvider';
 import { getUserStats, getWeeklyStats } from '../services/workoutService';
+import { saveWeeklyWorkoutsToLocal, getWeeklyWorkouts, calculateWeeklyStats } from '../services/dummyDataService';
 
 function Dashboard({ userLocation, weatherData, setWeatherData, changeScreen }) {
   const navigate = useNavigate();
@@ -342,6 +343,56 @@ function Dashboard({ userLocation, weatherData, setWeatherData, changeScreen }) 
           <i className="fas fa-user-cog text-2xl mb-2"></i>
           <span>프로필</span>
         </button>
+      </div>
+
+      {/* 테스트 데이터 생성 섹션 */}
+      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+        <h3 className="text-lg font-semibold text-gray-800 mb-3">
+          🧪 테스트 데이터 생성
+        </h3>
+        <p className="text-sm text-gray-600 mb-4">
+          일주일치 운동 기록 더미 데이터를 생성하여 통계 기능을 테스트할 수 있습니다.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button
+            onClick={() => {
+              const workouts = saveWeeklyWorkoutsToLocal();
+              alert(`✅ ${workouts.length}개의 운동 기록이 생성되었습니다!\n\n통계 페이지에서 확인해보세요.`);
+              // 통계 업데이트
+              const stats = calculateWeeklyStats(workouts);
+              console.log('생성된 통계:', stats);
+            }}
+            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
+          >
+            <i className="fas fa-database mr-2"></i>
+            일주일 운동 기록 생성
+          </button>
+          <button
+            onClick={async () => {
+              const workouts = await getWeeklyWorkouts('local');
+              navigate('/exercise-result', { 
+                state: { 
+                  result: workouts[0] || null,
+                  weeklyWorkouts: workouts 
+                } 
+              });
+            }}
+            className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors"
+          >
+            <i className="fas fa-chart-line mr-2"></i>
+            운동 결과 보기
+          </button>
+          <button
+            onClick={() => navigate('/stats')}
+            className="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg transition-colors"
+          >
+            <i className="fas fa-chart-bar mr-2"></i>
+            통계 페이지로 이동
+          </button>
+        </div>
+        <div className="mt-3 text-xs text-gray-500">
+          💡 Tip: 생성된 데이터는 브라우저 로컬 스토리지에 저장됩니다.
+        </div>
       </div>
 
       {/* 앱 특징 소개 */}
