@@ -86,12 +86,60 @@ function RealTimeMonitoring({ userLocation }) {
 
   const startExercise = () => {
     // 실제 운동 트래킹 페이지로 이동
+    // 간단한 기본 경로 생성 (실제로는 선택한 코스의 경로를 전달해야 함)
+    const dummyRoute = {
+      name: '테스트 러닝 코스',
+      distance: 3000, // 3km
+      path: generateSimpleRoute(), // 간단한 경로 생성
+      instructions: [
+        { text: '출발지에서 북쪽으로 직진' },
+        { text: '500m 후 우회전' },
+        { text: '1km 직진' },
+        { text: '좌회전 후 500m' },
+        { text: '우회전 후 목적지 도착' }
+      ]
+    };
+    
     navigate('/exercise-tracking', {
       state: {
         exerciseType: exerciseType,
-        targetHeartRate: targetHeartRate
+        targetHeartRate: targetHeartRate,
+        route: dummyRoute
       }
     });
+  };
+  
+  // 간단한 테스트 경로 생성 함수
+  const generateSimpleRoute = () => {
+    // 사용자 현재 위치 기준으로 간단한 경로 생성
+    const startLat = userLocation?.lat || 35.1796;
+    const startLng = userLocation?.lng || 129.0756;
+    const points = [];
+    
+    // 3km 정도의 사각형 경로 생성
+    for (let i = 0; i <= 20; i++) {
+      let lat, lng;
+      if (i <= 5) {
+        // 북쪽으로
+        lat = startLat + (i * 0.0015);
+        lng = startLng;
+      } else if (i <= 10) {
+        // 동쪽으로
+        lat = startLat + 0.0075;
+        lng = startLng + ((i - 5) * 0.0015);
+      } else if (i <= 15) {
+        // 남쪽으로
+        lat = startLat + 0.0075 - ((i - 10) * 0.0015);
+        lng = startLng + 0.0075;
+      } else {
+        // 서쪽으로 (출발점으로)
+        lat = startLat;
+        lng = startLng + 0.0075 - ((i - 15) * 0.0015);
+      }
+      points.push({ lat, lng });
+    }
+    
+    return points;
   };
 
   const stopExercise = () => {

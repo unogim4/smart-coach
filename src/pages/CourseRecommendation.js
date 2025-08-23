@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import LocationBasedCourseMap from '../components/LocationBasedCourseMap';
 import NavigationMap from '../components/NavigationMap';
 import { 
@@ -8,6 +9,7 @@ import {
 } from '../services/locationBasedCourseService';
 
 function CourseRecommendation({ userLocation, weatherData }) {
+  const navigate = useNavigate();
   const [viewMode, setViewMode] = useState('classic'); // 'classic' or 'navigation'
   const [courses, setCourses] = useState([]);
   const [selectedCourse, setSelectedCourse] = useState(null);
@@ -189,10 +191,63 @@ function CourseRecommendation({ userLocation, weatherData }) {
     setSelectedCourse(course);
     setShowRoute(true);
   };
-
-  // 코스 시작 핸들러
+  
+  // 코스 시작 함수 추가
   const handleStartCourse = (course) => {
-    alert(`${course.name} 코스를 시작합니다! 실시간 모니터링 페이지로 이동합니다.`);
+    // 코스를 따라 러닝할 수 있도록 경로 생성
+    const routeData = {
+      name: course.name,
+      distance: parseFloat(course.estimatedDistance) * 1000, // km를 미터로 변환
+      path: generateCoursePath(course), // 코스 경로 생성
+      instructions: generateInstructions(course),
+      difficulty: course.difficulty,
+      vicinity: course.vicinity
+    };
+    
+    // ExerciseTracking 페이지로 이동
+    navigate('/exercise-tracking', {
+      state: {
+        route: routeData,
+        exerciseType: 'running', // 기본값: 러닝
+        targetHeartRate: { min: 120, max: 160 }
+      }
+    });
+  };
+  
+  // 코스 경로 생성 함수
+  const generateCoursePath = (course) => {
+    // 코스 중심점 기준으로 원형 경로 생성
+    const centerLat = course.geometry.location.lat;
+    const centerLng = course.geometry.location.lng;
+    const distance = parseFloat(course.estimatedDistance);
+    const points = [];
+    
+    // 거리에 따라 반지름 계산 (대략적)
+    const radius = distance * 0.0003; // km를 도 단위로 변환
+    
+    // 원형 경로 생성 (36개 포인트)
+    for (let i = 0; i <= 36; i++) {
+      const angle = (i * 10) * Math.PI / 180; // 10도씩 회전
+      const lat = centerLat + radius * Math.cos(angle);
+      const lng = centerLng + radius * Math.sin(angle) * 1.2; // 경도는 보정
+      points.push({ lat, lng });
+    }
+    
+    return points;
+  };
+  
+  // 네비게이션 안내 생성
+  const generateInstructions = (course) => {
+    const distance = parseFloat(course.estimatedDistance);
+    const quarterDistance = distance / 4;
+    
+    return [
+      { text: `${course.name}에서 출발` },
+      { text: `${(quarterDistance * 1000).toFixed(0)}m 후 우회전` },
+      { text: `${(quarterDistance * 1000).toFixed(0)}m 직진` },
+      { text: `${(quarterDistance * 1000).toFixed(0)}m 후 우회전` },
+      { text: `${(quarterDistance * 1000).toFixed(0)}m 후 도착` }
+    ];
   };
 
   return (

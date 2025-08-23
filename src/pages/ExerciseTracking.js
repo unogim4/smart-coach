@@ -49,6 +49,26 @@ function ExerciseTracking() {
   const [coachMessage, setCoachMessage] = useState('운동을 시작하세요!');
   const [alerts, setAlerts] = useState([]);
 
+  // 컴포넌트 마운트 시 자동으로 GPS 시작
+  useEffect(() => {
+    // 페이지 로드 시 자동으로 운동 시작
+    console.log('🏃 ExerciseTracking 페이지 로드됨');
+    
+    // 1초 후 자동으로 운동 시작 (사용자가 준비할 시간)
+    const autoStartTimer = setTimeout(() => {
+      console.log('⏱️ 자동으로 운동을 시작합니다!');
+      startExercise();
+    }, 1000);
+    
+    return () => {
+      clearTimeout(autoStartTimer);
+      // 페이지 벗어날 때 GPS 정리
+      if (watchIdRef.current) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+    };
+  }, []); // 최초 한 번만 실행
+  
   // 지도 초기화
   useEffect(() => {
     if (!mapRef.current || !window.google) return;
@@ -142,6 +162,70 @@ function ExerciseTracking() {
 
   }, [route]);
 
+  // GPS 위치가 없을 때를 위한 시뮬레이션 모드
+  const startSimulationMode = () => {
+    console.log('🎮 시뮬레이션 모드로 실행');
+    setGpsStatus('시뮬레이션');
+    
+    // 초기 위치 설정 (부산 연산동)
+    let simLat = route?.path?.[0]?.lat || 35.1796;
+    let simLng = route?.path?.[0]?.lng || 129.0756;
+    let pathIndex = 0;
+    
+    // 시뮬레이션 interval
+    const simInterval = setInterval(() => {
+      if (!isExercising || isPaused) return;
+      
+      // 경로를 따라 이동
+      if (route?.path && pathIndex < route.path.length) {
+        const targetPoint = route.path[pathIndex];
+        simLat += (targetPoint.lat - simLat) * 0.1;
+        simLng += (targetPoint.lng - simLng) * 0.1;
+        
+        if (Math.abs(targetPoint.lat - simLat) < 0.0001) {
+          pathIndex++;
+        }
+      } else {
+        // 경로가 없으면 랜덤 이동
+        simLat += (Math.random() - 0.5) * 0.0001;
+        simLng += (Math.random() - 0.5) * 0.0001;
+      }
+      
+      const simPosition = {
+        lat: simLat,
+        lng: simLng,
+        altitude: 10 + Math.random() * 5,
+        accuracy: 10,
+        speed: 2 + Math.random(), // 2-3 m/s (러닝 속도)
+        timestamp: Date.now()
+      };
+      
+      setCurrentPosition(simPosition);
+      setGpsAccuracy(10);
+      
+      // 지도 업데이트
+      if (userMarkerRef.current && mapInstanceRef.current) {
+        const latLng = new window.google.maps.LatLng(simPosition.lat, simPosition.lng);
+        userMarkerRef.current.setPosition(latLng);
+        mapInstanceRef.current.panTo(latLng);
+      }
+      
+      // 운동 데이터 업데이트
+      updateExerciseData(simPosition);
+      updateRouteProgress(simPosition);
+      pathHistoryRef.current.push(simPosition);
+      
+      // 지나온 경로 업데이트
+      if (passedPolylineRef.current) {
+        passedPolylineRef.current.setPath(
+          pathHistoryRef.current.map(p => ({ lat: p.lat, lng: p.lng }))
+        );
+      }
+    }, 1000); // 1초마다 업데이트
+    
+    window.simulationInterval = simInterval;
+  };
+  
   // GPS 위치 추적 시작
   const startGPSTracking = () => {
     if (!navigator.geolocation) {
@@ -149,16 +233,18 @@ function ExerciseTracking() {
       return;
     }
 
+    console.log('📍 GPS 추적 시작...');
     setGpsStatus('연결중...');
     
     const options = {
       enableHighAccuracy: true,
-      timeout: 5000,
+      timeout: 10000,  // 타임아웃 늘림
       maximumAge: 0
     };
 
     watchIdRef.current = navigator.geolocation.watchPosition(
       (position) => {
+        console.log('📍 GPS 위치 업데이트:', position.coords);
         const newPosition = {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
@@ -203,13 +289,16 @@ function ExerciseTracking() {
         
         switch(error.code) {
           case error.PERMISSION_DENIED:
-            alert('위치 권한을 허용해주세요');
+            alert('위치 권한을 허용해주세요. 시뮬레이션 모드로 전환합니다.');
+            startSimulationMode(); // GPS 실패 시 시뮬레이션 모드
             break;
           case error.POSITION_UNAVAILABLE:
-            alert('위치 정보를 사용할 수 없습니다');
+            alert('위치 정보를 사용할 수 없습니다. 시뮬레이션 모드로 전환합니다.');
+            startSimulationMode();
             break;
           case error.TIMEOUT:
-            setGpsStatus('시간초과 - 재시도중...');
+            setGpsStatus('시간초과 - 시뮬레이션 모드로 전환');
+            startSimulationMode();
             break;
         }
       },
@@ -224,6 +313,12 @@ function ExerciseTracking() {
       watchIdRef.current = null;
       setGpsStatus('중지됨');
     }
+    
+    // 시뮬레이션 모드도 정리
+    if (window.simulationInterval) {
+      clearInterval(window.simulationInterval);
+      window.simulationInterval = null;
+    }
   };
 
   // 운동 데이터 업데이트
@@ -232,9 +327,11 @@ function ExerciseTracking() {
     
     if (!startTimeRef.current) {
       startTimeRef.current = currentTime;
+      console.log('⏱️ 운동 시작 시간 설정');
     }
 
     const elapsedTime = Math.floor((currentTime - startTimeRef.current) / 1000);
+    console.log(`⏱️ 경과 시간: ${elapsedTime}초`);
     
     // 이전 위치가 있으면 거리 계산
     if (pathHistoryRef.current.length > 0) {
@@ -405,6 +502,7 @@ function ExerciseTracking() {
 
   // 운동 시작
   const startExercise = () => {
+    console.log('🏃 운동 시작!');
     setIsExercising(true);
     setIsPaused(false);
     startTimeRef.current = Date.now();
@@ -412,6 +510,19 @@ function ExerciseTracking() {
     distanceAccumulator.current = 0;
     startGPSTracking();
     setCoachMessage('운동을 시작합니다! 화이팅! 💪');
+    
+    // 시간 업데이트를 위한 interval 설정 (이게 빠져있었네요!)
+    const timeInterval = setInterval(() => {
+      if (!isPaused) {
+        setExerciseData(prev => ({
+          ...prev,
+          time: Math.floor((Date.now() - startTimeRef.current) / 1000)
+        }));
+      }
+    }, 1000); // 1초마다 업데이트
+    
+    // interval ID 저장 (나중에 정리하기 위해)
+    window.exerciseTimeInterval = timeInterval;
   };
 
   // 운동 일시정지
@@ -428,9 +539,16 @@ function ExerciseTracking() {
 
   // 운동 종료
   const stopExercise = () => {
+    console.log('🎯 운동 종료');
     setIsExercising(false);
     setIsPaused(false);
     stopGPSTracking();
+    
+    // 시간 interval 정리
+    if (window.exerciseTimeInterval) {
+      clearInterval(window.exerciseTimeInterval);
+      window.exerciseTimeInterval = null;
+    }
     
     // 운동 결과 저장
     const result = {
