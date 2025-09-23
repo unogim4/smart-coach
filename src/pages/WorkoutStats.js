@@ -17,11 +17,20 @@ function WorkoutStats() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [aiAdvice, setAiAdvice] = useState([]);
+  const [showAiModal, setShowAiModal] = useState(false);
 
   // 데이터 로드
   useEffect(() => {
     loadAllStats();
   }, []);
+
+  // AI 조언 생성
+  useEffect(() => {
+    if (userStats && weeklyStats && goals) {
+      generateAIAdvice();
+    }
+  }, [userStats, weeklyStats, goals]);
 
   // 월 변경 시 월간 통계 재로드
   useEffect(() => {
@@ -80,6 +89,135 @@ function WorkoutStats() {
     return Math.min(100, Math.round((current / goal) * 100));
   };
 
+  // AI 조언 생성 함수
+  const generateAIAdvice = () => {
+    const advice = [];
+    
+    // 1. 운동 빈도 분석
+    const weeklyWorkouts = weeklyStats?.weeklyTotal?.workouts || 0;
+    const weeklyGoal = goals?.weeklyWorkouts || 3;
+    
+    if (weeklyWorkouts === 0) {
+      advice.push({
+        type: 'warning',
+        icon: '⚠️',
+        title: '운동 빈도 부족',
+        message: '이번 주에 아직 운동을 하지 않으셨네요. 가볍게 10분이라도 시작해보세요!',
+        action: '오늘 바로 시작하기'
+      });
+    } else if (weeklyWorkouts < weeklyGoal) {
+      advice.push({
+        type: 'info',
+        icon: '💡',
+        title: '목표 달성 근처',
+        message: `주간 목표까지 ${weeklyGoal - weeklyWorkouts}회만 더 하면 돼요! 할 수 있어요!`,
+        action: '코스 추천 받기'
+      });
+    } else {
+      advice.push({
+        type: 'success',
+        icon: '🎆',
+        title: '목표 달성!',
+        message: '훌륙합니다! 주간 운동 목표를 달성했어요!',
+        action: '다음 단계 목표 설정'
+      });
+    }
+    
+    // 2. 균형 분석
+    const dailyStats = weeklyStats?.dailyStats || {};
+    const activeDays = Object.values(dailyStats).filter(day => day.workouts > 0).length;
+    
+    if (activeDays > 0 && activeDays < 3) {
+      advice.push({
+        type: 'info',
+        icon: '📆',
+        title: '균형있는 운동 배분',
+        message: '특정 날짜에만 운동이 집중되어 있네요. 주 3-4회로 분산하면 획복에 더 좋아요.',
+        action: '운동 일정 조정'
+      });
+    }
+    
+    // 3. 거리 분석
+    const weeklyDistance = weeklyStats?.weeklyTotal?.distance || 0;
+    const avgDistance = weeklyWorkouts > 0 ? weeklyDistance / weeklyWorkouts : 0;
+    
+    if (avgDistance > 0 && avgDistance < 3000) {
+      advice.push({
+        type: 'tip',
+        icon: '🏃',
+        title: '점진적 거리 증가',
+        message: `현재 평균 ${(avgDistance/1000).toFixed(1)}km를 달리고 계시네요. 매주 10%씩 거리를 늘려보세요.`,
+        action: '경로 추천 보기'
+      });
+    } else if (avgDistance > 10000) {
+      advice.push({
+        type: 'warning',
+        icon: '🔥',
+        title: '과도한 운동량',
+        message: `평균 ${(avgDistance/1000).toFixed(1)}km는 높은 거리예요. 충분한 휴식도 중요합니다!`,
+        action: '회복 가이드'
+      });
+    }
+    
+    // 4. 레벌업 제안
+    const totalWorkouts = userStats?.totalWorkouts || 0;
+    if (totalWorkouts > 10 && totalWorkouts < 30) {
+      advice.push({
+        type: 'level',
+        icon: '🏅',
+        title: '레벨 업!',
+        message: '초급자 단계를 벗어났어요! 이제 중급 코스에 도전해보세요.',
+        action: '중급 코스 보기'
+      });
+    } else if (totalWorkouts >= 30) {
+      advice.push({
+        type: 'expert',
+        icon: '🌟',
+        title: '베테랑 러너',
+        message: `${totalWorkouts}회의 운동을 완료하셨네요! 대회 참가를 고려해보세요.`,
+        action: '대회 정보 보기'
+      });
+    }
+    
+    // 5. 연속 운동 분석
+    const currentStreak = userStats?.currentStreak || 0;
+    const longestStreak = userStats?.longestStreak || 0;
+    
+    if (currentStreak >= 7) {
+      advice.push({
+        type: 'achievement',
+        icon: '🔥',
+        title: `${currentStreak}일 연속 운동!`,
+        message: '대단한 꾸준함입니다! 이 기세를 이어가세요.',
+        action: '지속 가능한 플랜'
+      });
+    } else if (currentStreak === 0 && longestStreak > 3) {
+      advice.push({
+        type: 'motivation',
+        icon: '💪',
+        title: '다시 시작하세요!',
+        message: `이전에 ${longestStreak}일 연속 운동한 기록이 있어요. 다시 도전해보세요!`,
+        action: '오늘 운동하기'
+      });
+    }
+    
+    // 6. 칼로리 분석
+    const weeklyCalories = weeklyStats?.weeklyTotal?.calories || 0;
+    const calorieGoal = (goals?.dailyCalories || 300) * 7;
+    
+    if (weeklyCalories > 0 && weeklyCalories < calorieGoal * 0.5) {
+      advice.push({
+        type: 'tip',
+        icon: '🔥',
+        title: '운동 강도 증가 필요',
+        message: '운동 시간을 늘리거나 강도를 높여 칼로리 소모를 증가시켜보세요.',
+        action: '고강도 코스 찾기'
+      });
+    }
+    
+    setAiAdvice(advice);
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -98,6 +236,20 @@ function WorkoutStats() {
         <div className="container mx-auto">
           <h1 className="text-3xl font-bold mb-2">📊 운동 통계</h1>
           <p className="text-purple-100">나의 운동 기록과 성과를 확인하세요</p>
+          
+          {/* AI 조언 버튼 */}
+          <button
+            onClick={() => setShowAiModal(true)}
+            className="mt-4 bg-white bg-opacity-20 hover:bg-opacity-30 text-white px-4 py-2 rounded-lg transition-all flex items-center"
+          >
+            <i className="fas fa-robot mr-2"></i>
+            AI 코치 조언 보기
+            {aiAdvice.length > 0 && (
+              <span className="ml-2 bg-white bg-opacity-90 text-purple-600 rounded-full px-2 py-0.5 text-xs font-bold">
+                {aiAdvice.length}
+              </span>
+            )}
+          </button>
         </div>
       </div>
 
@@ -199,6 +351,40 @@ function WorkoutStats() {
           </div>
 
           <div className="p-6">
+            {/* AI 조언 카드 - 개요 탭에 표시 */}
+            {activeTab === 'overview' && aiAdvice.length > 0 && (
+              <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-lg font-semibold text-purple-800">
+                    <i className="fas fa-robot mr-2"></i>
+                    AI 코치 조언
+                  </h3>
+                  <button
+                    onClick={() => setShowAiModal(true)}
+                    className="text-purple-600 hover:text-purple-800 text-sm font-medium"
+                  >
+                    전체 보기 →
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {aiAdvice.slice(0, 2).map((advice, index) => (
+                    <div
+                      key={index}
+                      className="bg-white p-3 rounded-lg"
+                    >
+                      <div className="flex items-start">
+                        <span className="text-xl mr-2">{advice.icon}</span>
+                        <div className="flex-1">
+                          <h4 className="font-medium text-gray-800 text-sm">{advice.title}</h4>
+                          <p className="text-xs text-gray-600 mt-1">{advice.message}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* 개요 탭 */}
             {activeTab === 'overview' && (
               <div className="space-y-6">
@@ -539,6 +725,91 @@ function WorkoutStats() {
           </div>
         </div>
       </div>
+
+      {/* AI 조언 모달 */}
+      {showAiModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-hidden">
+            <div className="bg-gradient-to-r from-purple-600 to-pink-600 text-white p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <i className="fas fa-robot text-3xl mr-3"></i>
+                  <div>
+                    <h2 className="text-2xl font-bold">AI 코치 분석 결과</h2>
+                    <p className="text-purple-100">당신의 운동 데이터를 분석했어요!</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowAiModal(false)}
+                  className="text-white hover:text-purple-200 transition-colors"
+                >
+                  <i className="fas fa-times text-2xl"></i>
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6 overflow-y-auto max-h-[60vh]">
+              {aiAdvice.length > 0 ? (
+                <div className="space-y-4">
+                  {aiAdvice.map((advice, index) => (
+                    <div
+                      key={index}
+                      className={`p-4 rounded-lg border-l-4 ${
+                        advice.type === 'success' ? 'bg-green-50 border-green-500' :
+                        advice.type === 'warning' ? 'bg-yellow-50 border-yellow-500' :
+                        advice.type === 'info' ? 'bg-blue-50 border-blue-500' :
+                        advice.type === 'achievement' ? 'bg-purple-50 border-purple-500' :
+                        advice.type === 'tip' ? 'bg-orange-50 border-orange-500' :
+                        advice.type === 'level' ? 'bg-indigo-50 border-indigo-500' :
+                        advice.type === 'expert' ? 'bg-pink-50 border-pink-500' :
+                        advice.type === 'motivation' ? 'bg-cyan-50 border-cyan-500' :
+                        'bg-gray-50 border-gray-500'
+                      }`}
+                    >
+                      <div className="flex items-start">
+                        <span className="text-2xl mr-3">{advice.icon}</span>
+                        <div className="flex-1">
+                          <h3 className="font-bold text-lg mb-1">{advice.title}</h3>
+                          <p className="text-gray-700 mb-3">{advice.message}</p>
+                          <button className="text-sm font-medium text-purple-600 hover:text-purple-800 transition-colors">
+                            {advice.action} →
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <i className="fas fa-spinner fa-spin text-4xl text-purple-500 mb-4"></i>
+                  <p className="text-gray-600">분석 중...</p>
+                </div>
+              )}
+              
+              {/* 추가 팁 */}
+              <div className="mt-6 p-4 bg-gradient-to-r from-purple-100 to-pink-100 rounded-lg">
+                <h4 className="font-bold text-purple-800 mb-2">
+                  <i className="fas fa-lightbulb mr-2"></i>
+                  오늘의 팁
+                </h4>
+                <p className="text-sm text-purple-700">
+                  꾸준함이 가장 중요합니다! 매일 작은 목표라도 달성해보세요.
+                  운동은 습관이 되면 삶의 일부가 됩니다.
+                </p>
+              </div>
+            </div>
+            
+            <div className="p-6 bg-gray-50 border-t">
+              <button
+                onClick={() => setShowAiModal(false)}
+                className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-lg font-medium transition-colors"
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

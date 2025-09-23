@@ -45,35 +45,85 @@ function CourseRecommendation({ userLocation, weatherData }) {
         // 주변 러닝 코스 검색
         let nearbyCourses = await searchNearbyRunningCourses(location, filters.maxDistance);
         
-        // 🌟 온천장 코스 추가 (부산 지역일 때)
+        // 🌟 특별 코스들 추가 (부산 지역일 때)
         if (location.lat >= 35.0 && location.lat <= 35.4 && 
             location.lng >= 128.8 && location.lng <= 129.3) {
-          // 부산 지역이면 온천장 코스 추가
-          const oncheonCourse = {
-            id: 'oncheon-special',
-            name: '🌟 온천장 러닝 코스',
-            distance: 1500,
-            difficulty: DIFFICULTY_LEVELS.EASY,
-            elevation: 15,
-            description: '부드러운 9분 코스, GPS 기반 실시간 트래킹',
-            estimatedTime: '9분',
-            type: 'special',
-            location: {
-              lat: 35.220462,
-              lng: 129.086192
+          // 부산 지역이면 특별 코스들 추가
+          const specialCourses = [
+            {
+              id: 'oncheon-special',
+              name: '🌟 온천장 러닝 코스',
+              distance: 1500,
+              difficulty: DIFFICULTY_LEVELS.EASY,
+              elevation: 15,
+              description: '부드러운 9분 코스, GPS 기반 실시간 트래킹',
+              estimatedTime: '9분',
+              type: 'special',
+              location: {
+                lat: 35.220462,
+                lng: 129.086192
+              },
+              address: '부산 동래구 온천장로',
+              features: ['실시간 GPS 트래킹', '자동 페이스 조절', 'AI 코치 피드백'],
+              isSpecialCourse: true,
+              simulationType: 'oncheonCourse',
+              waypoints: [
+                { lat: 35.220462, lng: 129.086192, label: '시작점' },
+                { lat: 35.229843, lng: 129.091357, label: '경유지' },
+                { lat: 35.234004, lng: 129.091775, label: '도착지' }
+              ]
             },
-            address: '부산 동래구 온천장로',
-            features: ['실시간 GPS 트래킹', '자동 페이스 조절', 'AI 코치 피드백'],
-            isSpecialCourse: true,
-            waypoints: [
-              { lat: 35.220462, lng: 129.086192, label: '시작점' },
-              { lat: 35.229843, lng: 129.091357, label: '경유지' },
-              { lat: 35.234004, lng: 129.091775, label: '도착지' }
-            ]
-          };
+            {
+              id: 'custom-course-1',
+              name: '🏪 서동 시장 러닝 코스',
+              distance: 2800,
+              difficulty: DIFFICULTY_LEVELS.MEDIUM,
+              elevation: 20,
+              description: '서동 시장 인근 편도 2.8km 러닝 코스',
+              estimatedTime: '17분',
+              type: 'special',
+              location: {
+                lat: 35.214154,
+                lng: 129.108309
+              },
+              address: '부산 금정구 서동',
+              features: ['편도 코스', '시장 근처', '활기찬 분위기'],
+              isSpecialCourse: true,
+              simulationType: 'customCourse1',
+              waypoints: [
+                { lat: 35.214154, lng: 129.108309, label: '출발' },
+                { lat: 35.214978, lng: 129.102751, label: '경유지' },
+                { lat: 35.216415, lng: 129.099082, label: '도착' }
+              ]
+            },
+            {
+              id: 'custom-course-2',
+              name: '🏃‍♂️ 부산 장거리 러닝 코스',
+              distance: 4500,
+              difficulty: DIFFICULTY_LEVELS.HARD,
+              elevation: 35,
+              description: '동래구-해운대구 연결 편도 4.5km 장거리 코스',
+              estimatedTime: '28분',
+              type: 'special',
+              location: {
+                lat: 35.218211,
+                lng: 129.100694
+              },
+              address: '부산 동래구-해운대구',
+              features: ['편도 코스', '장거리', '2개 경유지', '도전적'],
+              isSpecialCourse: true,
+              simulationType: 'customCourse2',
+              waypoints: [
+                { lat: 35.218211, lng: 129.100694, label: '출발' },
+                { lat: 35.214617, lng: 129.105082, label: '경유지1' },
+                { lat: 35.214574, lng: 129.105726, label: '경유지2' },
+                { lat: 35.217063, lng: 129.133719, label: '도착' }
+              ]
+            }
+          ];
           
           // 코스 배열 맨 앞에 추가
-          nearbyCourses = [oncheonCourse, ...nearbyCourses];
+          nearbyCourses = [...specialCourses, ...nearbyCourses];
         }
         
         setCourses(nearbyCourses);
@@ -226,14 +276,15 @@ function CourseRecommendation({ userLocation, weatherData }) {
   
   // 코스 시작 함수 추가
   const handleStartCourse = (course) => {
-    // 🌟 온천장 코스인 경우 특별 처리
-    if (course.id === 'oncheon-special') {
-      console.log('🏃 온천장 코스 시작!');
+    // 🌟 특별 코스들 처리
+    if (course.isSpecialCourse && course.simulationType) {
+      console.log(`🏃 ${course.name} 시작!`);
       navigate('/exercise-tracking', {
         state: {
           exerciseType: 'running',
           simulationMode: true,
-          simulationType: 'oncheonCourse'
+          simulationType: course.simulationType,
+          courseData: course
         }
       });
       return;

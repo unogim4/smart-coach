@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ONCHEONJANG_RUNNING_COURSE, generateSimulationData, updateSimulationData } from '../services/simulation/oncheonCourseSimulation';
-import { GEUMJEONG_COURSE, DONGNAE_COURSE, generateCourse1SimulationData, generateCourse2SimulationData, updateCourseSimulationData } from '../services/courses/additionalCourses';
+import { COURSE_1, COURSE_2, GEUMJEONG_COURSE, DONGNAE_COURSE, generateCourse1SimulationData, generateCourse2SimulationData, updateCourseSimulationData } from '../services/courses/additionalCourses';
 
 // 🏃‍♂️ 실시간 운동 트래킹 페이지
 function ExerciseTracking() {
@@ -95,6 +95,12 @@ function ExerciseTracking() {
     if (simulationMode) {
       if (simulationType === 'oncheonCourse') {
         course = ONCHEONJANG_RUNNING_COURSE;
+        centerPoint = course.path[0];
+      } else if (simulationType === 'customCourse1') {
+        course = COURSE_1;
+        centerPoint = course.path[0];
+      } else if (simulationType === 'customCourse2') {
+        course = COURSE_2;
         centerPoint = course.path[0];
       } else if (simulationType === 'geumjeongCourse') {
         course = GEUMJEONG_COURSE;
@@ -322,6 +328,158 @@ function ExerciseTracking() {
     }, updateInterval); // 0.1초마다 업데이트
   };
   
+  // 커스텀 코스 1 (서동 시장) 시뮬레이션
+  const startCustomCourse1Simulation = () => {
+    console.log('📍 서동 시장 코스 시작!');
+    
+    simulationDataRef.current = generateCourse1SimulationData();
+    
+    let elapsedSeconds = 0;
+    const updateInterval = 100;
+    const targetDuration = 1020; // 17분 = 1020초
+    
+    simulationIntervalRef.current = setInterval(() => {
+      if (!isExercisingRef.current || isPaused) return;
+      
+      elapsedSeconds += updateInterval / 1000;
+      const progress = Math.min((elapsedSeconds / targetDuration) * 100, 100);
+      
+      const updatedData = updateCourseSimulationData(simulationDataRef.current, elapsedSeconds);
+      simulationDataRef.current = updatedData;
+      
+      const currentPoint = updatedData.currentPosition;
+      if (!currentPoint || updatedData.completed) {
+        console.log('🎯 코스 완료!');
+        handleSimulationComplete();
+        return;
+      }
+      
+      setCurrentPosition({ lat: currentPoint.lat, lng: currentPoint.lng });
+      
+      if (userMarkerRef.current && mapInstanceRef.current) {
+        const latLng = new window.google.maps.LatLng(currentPoint.lat, currentPoint.lng);
+        userMarkerRef.current.setPosition(latLng);
+        if (Math.floor(elapsedSeconds * 2) % 1 === 0 && !isPaused) {
+          mapInstanceRef.current.panTo(latLng);
+        }
+      }
+      
+      if (Math.floor(elapsedSeconds) !== Math.floor(elapsedSeconds - updateInterval / 1000)) {
+        setExerciseData({
+          distance: updatedData.totalDistance,
+          time: Math.floor(elapsedSeconds),
+          speed: updatedData.currentSpeed,
+          avgSpeed: updatedData.avgSpeed,
+          maxSpeed: Math.max(exerciseData.maxSpeed || 0, parseFloat(updatedData.currentSpeed)),
+          heartRate: updatedData.currentHeartRate,
+          calories: updatedData.calories,
+          pace: updatedData.pace,
+          altitude: 10 + Math.random() * 5,
+          steps: updatedData.steps
+        });
+      }
+      
+      setRouteProgress(progress);
+      
+      if (elapsedSeconds % 0.5 < updateInterval / 1000) {
+        pathHistoryRef.current.push(currentPoint);
+        if (passedPolylineRef.current) {
+          passedPolylineRef.current.setPath(
+            pathHistoryRef.current.map(p => ({ lat: p.lat, lng: p.lng }))
+          );
+        }
+      }
+      
+      if (Math.floor(elapsedSeconds) % 10 === 0 && Math.floor(elapsedSeconds) !== Math.floor(elapsedSeconds - updateInterval / 1000)) {
+        generateCoachFeedback(
+          parseFloat(updatedData.currentSpeed),
+          updatedData.currentHeartRate,
+          elapsedSeconds
+        );
+      }
+      
+      if (elapsedSeconds >= targetDuration || updatedData.completed) {
+        handleSimulationComplete();
+      }
+    }, updateInterval);
+  };
+  
+  // 커스텀 코스 2 (장거리) 시뮬레이션
+  const startCustomCourse2Simulation = () => {
+    console.log('📍 부산 장거리 코스 시작!');
+    
+    simulationDataRef.current = generateCourse2SimulationData();
+    
+    let elapsedSeconds = 0;
+    const updateInterval = 100;
+    const targetDuration = 1680; // 28분 = 1680초
+    
+    simulationIntervalRef.current = setInterval(() => {
+      if (!isExercisingRef.current || isPaused) return;
+      
+      elapsedSeconds += updateInterval / 1000;
+      const progress = Math.min((elapsedSeconds / targetDuration) * 100, 100);
+      
+      const updatedData = updateCourseSimulationData(simulationDataRef.current, elapsedSeconds);
+      simulationDataRef.current = updatedData;
+      
+      const currentPoint = updatedData.currentPosition;
+      if (!currentPoint || updatedData.completed) {
+        console.log('🎯 코스 완료!');
+        handleSimulationComplete();
+        return;
+      }
+      
+      setCurrentPosition({ lat: currentPoint.lat, lng: currentPoint.lng });
+      
+      if (userMarkerRef.current && mapInstanceRef.current) {
+        const latLng = new window.google.maps.LatLng(currentPoint.lat, currentPoint.lng);
+        userMarkerRef.current.setPosition(latLng);
+        if (Math.floor(elapsedSeconds * 2) % 1 === 0 && !isPaused) {
+          mapInstanceRef.current.panTo(latLng);
+        }
+      }
+      
+      if (Math.floor(elapsedSeconds) !== Math.floor(elapsedSeconds - updateInterval / 1000)) {
+        setExerciseData({
+          distance: updatedData.totalDistance,
+          time: Math.floor(elapsedSeconds),
+          speed: updatedData.currentSpeed,
+          avgSpeed: updatedData.avgSpeed,
+          maxSpeed: Math.max(exerciseData.maxSpeed || 0, parseFloat(updatedData.currentSpeed)),
+          heartRate: updatedData.currentHeartRate,
+          calories: updatedData.calories,
+          pace: updatedData.pace,
+          altitude: 10 + Math.random() * 5,
+          steps: updatedData.steps
+        });
+      }
+      
+      setRouteProgress(progress);
+      
+      if (elapsedSeconds % 0.5 < updateInterval / 1000) {
+        pathHistoryRef.current.push(currentPoint);
+        if (passedPolylineRef.current) {
+          passedPolylineRef.current.setPath(
+            pathHistoryRef.current.map(p => ({ lat: p.lat, lng: p.lng }))
+          );
+        }
+      }
+      
+      if (Math.floor(elapsedSeconds) % 15 === 0 && Math.floor(elapsedSeconds) !== Math.floor(elapsedSeconds - updateInterval / 1000)) {
+        generateCoachFeedback(
+          parseFloat(updatedData.currentSpeed),
+          updatedData.currentHeartRate,
+          elapsedSeconds
+        );
+      }
+      
+      if (elapsedSeconds >= targetDuration || updatedData.completed) {
+        handleSimulationComplete();
+      }
+    }, updateInterval);
+  };
+  
   // 금정구 코스 시뮬레이션
   const startGeumjeongCourseSimulation = () => {
     console.log('📍 금정구 코스 시작!');
@@ -547,6 +705,12 @@ function ExerciseTracking() {
     if (simulationType === 'oncheonCourse') {
       console.log('🏃 온천장 코스 시작!');
       startOncheonCourseSimulation();
+    } else if (simulationType === 'customCourse1') {
+      console.log('🏃 서동 시장 코스 시작!');
+      startCustomCourse1Simulation();
+    } else if (simulationType === 'customCourse2') {
+      console.log('🏃 부산 장거리 코스 시작!');
+      startCustomCourse2Simulation();
     } else if (simulationType === 'geumjeongCourse') {
       console.log('🏃 금정구 코스 시작!');
       startGeumjeongCourseSimulation();
@@ -803,6 +967,8 @@ function ExerciseTracking() {
               <div>📍</div>
               <span className="text-sm font-bold">
                 {simulationType === 'oncheonCourse' && '온천장 러닝 코스'}
+                {simulationType === 'customCourse1' && '서동 시장 러닝 코스'}
+                {simulationType === 'customCourse2' && '부산 장거리 러닝 코스'}
                 {simulationType === 'geumjeongCourse' && '금정구 편도 코스'}
                 {simulationType === 'dongnaeCourse' && '동래구 순환 코스'}
               </span>
