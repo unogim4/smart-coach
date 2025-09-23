@@ -1,8 +1,26 @@
-// 🏃‍♂️ 운동 기록 관리 서비스
+// 🏃‍♂️ 운동 기록 관리 서비스 - 로컬 스토리지 지원 버전
 import { getFirestore, collection, doc, setDoc, getDoc, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 const db = getFirestore();
+
+/**
+ * 로컬 스토리지에서 운동 데이터 가져오기
+ */
+const getLocalWorkouts = () => {
+  try {
+    const data = localStorage.getItem('weeklyWorkouts');
+    if (data) {
+      console.log('📊 로컬 스토리지에서 운동 데이터 로드:', JSON.parse(data).length, '개');
+      return JSON.parse(data);
+    }
+    console.log('📊 로컬 스토리지에 운동 데이터 없음');
+    return [];
+  } catch (error) {
+    console.error('로컬 스토리지 읽기 실패:', error);
+    return [];
+  }
+};
 
 /**
  * 운동 기록 저장
@@ -13,7 +31,19 @@ export const saveWorkout = async (workoutData) => {
     const user = auth.currentUser;
     
     if (!user) {
-      throw new Error('로그인이 필요합니다');
+      // 로그인하지 않은 경우 로컬 스토리지에 저장
+      const localWorkouts = getLocalWorkouts();
+      const workoutId = `local_${Date.now()}`;
+      const workout = {
+        ...workoutData,
+        userId: 'local_user',
+        id: workoutId,
+        createdAt: new Date().toISOString(),
+        date: new Date().toDateString()
+      };
+      localWorkouts.push(workout);
+      localStorage.setItem('weeklyWorkouts', JSON.stringify(localWorkouts));
+      return workoutId;
     }
 
     const workoutId = `${user.uid}_${Date.now()}`;
@@ -26,8 +56,6 @@ export const saveWorkout = async (workoutData) => {
     };
 
     await setDoc(doc(db, 'workouts', workoutId), workout);
-    
-    // 사용자 통계 업데이트
     await updateUserStats(user.uid, workoutData);
     
     return workoutId;
@@ -98,23 +126,79 @@ const updateUserStats = async (userId, workoutData) => {
     return newStats;
   } catch (error) {
     console.error('통계 업데이트 실패:', error);
+    throw error;
   }
 };
 
 /**
- * 운동 기록 조회 (최근 N개)
+ * 운동 기록에서 통계 계산
+ */
+const calculateStatsFromWorkouts = (workouts) => {
+  if (!workouts || workouts.length === 0) {
+    return {
+      totalWorkouts: 0,
+      totalDistance: 0,
+      totalTime: 0,
+      totalCalories: 0,
+      longestDistance: 0,
+      longestTime: 0,
+      averageSpeed: 0,
+      currentStreak: 0,
+      longestStreak: 0
+    };
+  }
+
+  const stats = {
+    totalWorkouts: workouts.length,
+    totalDistance: 0,
+    totalTime: 0,
+    totalCalories: 0,
+    longestDistance: 0,
+    longestTime: 0,
+    averageSpeed: 0,
+    currentStreak: 0,
+    longestStreak: 0
+  };
+
+  workouts.forEach(workout => {
+    stats.totalDistance += workout.distance || 0;
+    stats.totalTime += workout.time || workout.duration || 0;
+    stats.totalCalories += workout.calories || 0;
+    stats.longestDistance = Math.max(stats.longestDistance, workout.distance || 0);
+    stats.longestTime = Math.max(stats.longestTime, workout.time || workout.duration || 0);
+  });
+
+  // 평균 속도 계산
+  if (stats.totalTime > 0) {
+    stats.averageSpeed = (stats.totalDistance / 1000) / (stats.totalTime / 3600);
+  }
+
+  return stats;
+};
+
+/**
+ * 최근 운동 기록 조회
  */
 export const getRecentWorkouts = async (limitCount = 10) => {
   try {
     const auth = getAuth();
     const user = auth.currentUser;
     
+    // 로그인 여부와 관계없이 로컬 스토리지 우선 확인
+    const localWorkouts = getLocalWorkouts();
+    if (localWorkouts && localWorkouts.length > 0) {
+      return localWorkouts
+        .sort((a, b) => new Date(b.timestamp || b.createdAt) - new Date(a.timestamp || a.createdAt))
+        .slice(0, limitCount);
+    }
+
     if (!user) {
       return [];
     }
 
+    const workoutsRef = collection(db, 'workouts');
     const q = query(
-      collection(db, 'workouts'),
+      workoutsRef,
       where('userId', '==', user.uid),
       orderBy('createdAt', 'desc'),
       limit(limitCount)
@@ -122,7 +206,7 @@ export const getRecentWorkouts = async (limitCount = 10) => {
 
     const querySnapshot = await getDocs(q);
     const workouts = [];
-    
+
     querySnapshot.forEach((doc) => {
       workouts.push({ id: doc.id, ...doc.data() });
     });
@@ -130,15 +214,28 @@ export const getRecentWorkouts = async (limitCount = 10) => {
     return workouts;
   } catch (error) {
     console.error('운동 기록 조회 실패:', error);
-    return [];
+    return getLocalWorkouts()
+      .sort((a, b) => new Date(b.timestamp || b.createdAt) - new Date(a.timestamp || a.createdAt))
+      .slice(0, limitCount);
   }
 };
 
 /**
- * 특정 기간 운동 기록 조회
+ * 날짜 범위별 운동 기록 조회
  */
 export const getWorkoutsByDateRange = async (startDate, endDate) => {
   try {
+    const localWorkouts = getLocalWorkouts();
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    if (localWorkouts && localWorkouts.length > 0) {
+      return localWorkouts.filter(workout => {
+        const workoutDate = new Date(workout.timestamp || workout.createdAt);
+        return workoutDate >= start && workoutDate <= end;
+      });
+    }
+
     const auth = getAuth();
     const user = auth.currentUser;
     
@@ -146,8 +243,9 @@ export const getWorkoutsByDateRange = async (startDate, endDate) => {
       return [];
     }
 
+    const workoutsRef = collection(db, 'workouts');
     const q = query(
-      collection(db, 'workouts'),
+      workoutsRef,
       where('userId', '==', user.uid),
       where('createdAt', '>=', startDate.toISOString()),
       where('createdAt', '<=', endDate.toISOString()),
@@ -156,14 +254,14 @@ export const getWorkoutsByDateRange = async (startDate, endDate) => {
 
     const querySnapshot = await getDocs(q);
     const workouts = [];
-    
+
     querySnapshot.forEach((doc) => {
       workouts.push({ id: doc.id, ...doc.data() });
     });
 
     return workouts;
   } catch (error) {
-    console.error('기간별 운동 기록 조회 실패:', error);
+    console.error('날짜별 운동 기록 조회 실패:', error);
     return [];
   }
 };
@@ -173,11 +271,17 @@ export const getWorkoutsByDateRange = async (startDate, endDate) => {
  */
 export const getUserStats = async () => {
   try {
+    // 로컬 스토리지 우선 확인
+    const localWorkouts = getLocalWorkouts();
+    if (localWorkouts && localWorkouts.length > 0) {
+      return calculateStatsFromWorkouts(localWorkouts);
+    }
+
     const auth = getAuth();
     const user = auth.currentUser;
     
     if (!user) {
-      return null;
+      return calculateStatsFromWorkouts([]);
     }
 
     const statsRef = doc(db, 'userStats', user.uid);
@@ -187,158 +291,164 @@ export const getUserStats = async () => {
       return statsSnap.data();
     }
     
-    return {
-      totalWorkouts: 0,
-      totalDistance: 0,
-      totalTime: 0,
-      totalCalories: 0,
-      longestDistance: 0,
-      longestTime: 0,
-      averageSpeed: 0,
-      weeklyGoal: 5,
-      currentStreak: 0,
-      longestStreak: 0
-    };
+    // 통계가 없으면 계산
+    const workouts = await getRecentWorkouts(100);
+    return calculateStatsFromWorkouts(workouts);
   } catch (error) {
     console.error('통계 조회 실패:', error);
-    return null;
+    return calculateStatsFromWorkouts(getLocalWorkouts());
   }
 };
 
 /**
- * 주간 운동 통계 조회
+ * 주간 통계 조회
  */
 export const getWeeklyStats = async () => {
   try {
-    const auth = getAuth();
-    const user = auth.currentUser;
+    // 로컬 스토리지에서 데이터 가져오기
+    const localWorkouts = getLocalWorkouts();
+    console.log('📊 주간 통계 계산, 전체 운동 수:', localWorkouts.length);
     
-    if (!user) {
-      return null;
-    }
-
-    // 이번 주 시작일 (월요일)
     const today = new Date();
-    const monday = new Date(today);
-    monday.setDate(today.getDate() - today.getDay() + 1);
-    monday.setHours(0, 0, 0, 0);
-
-    // 이번 주 끝일 (일요일)
-    const sunday = new Date(monday);
-    sunday.setDate(monday.getDate() + 6);
-    sunday.setHours(23, 59, 59, 999);
-
-    const workouts = await getWorkoutsByDateRange(monday, sunday);
+    const weekStart = new Date(today);
+    weekStart.setDate(today.getDate() - today.getDay()); // 일요일
+    weekStart.setHours(0, 0, 0, 0);
     
-    // 요일별 통계 생성
-    const dailyStats = {
-      월: { workouts: 0, distance: 0, calories: 0 },
-      화: { workouts: 0, distance: 0, calories: 0 },
-      수: { workouts: 0, distance: 0, calories: 0 },
-      목: { workouts: 0, distance: 0, calories: 0 },
-      금: { workouts: 0, distance: 0, calories: 0 },
-      토: { workouts: 0, distance: 0, calories: 0 },
-      일: { workouts: 0, distance: 0, calories: 0 }
-    };
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6); // 토요일
+    weekEnd.setHours(23, 59, 59, 999);
 
-    const daysKorean = ['일', '월', '화', '수', '목', '금', '토'];
+    // 이번 주 운동 필터링
+    const weekWorkouts = localWorkouts.filter(workout => {
+      const workoutDate = new Date(workout.timestamp || workout.createdAt);
+      return workoutDate >= weekStart && workoutDate <= weekEnd;
+    });
     
-    workouts.forEach(workout => {
-      const date = new Date(workout.createdAt);
-      const dayName = daysKorean[date.getDay()];
+    console.log('📊 이번 주 운동 수:', weekWorkouts.length);
+
+    // 요일별 통계
+    const dailyStats = {};
+    const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+    
+    dayNames.forEach(day => {
+      dailyStats[day] = { workouts: 0, distance: 0, calories: 0, time: 0 };
+    });
+
+    weekWorkouts.forEach(workout => {
+      const workoutDate = new Date(workout.timestamp || workout.createdAt);
+      const dayName = dayNames[workoutDate.getDay()];
       
-      dailyStats[dayName].workouts += 1;
-      dailyStats[dayName].distance += workout.distance || 0;
-      dailyStats[dayName].calories += workout.calories || 0;
+      if (dailyStats[dayName]) {
+        dailyStats[dayName].workouts++;
+        dailyStats[dayName].distance += workout.distance || 0;
+        dailyStats[dayName].calories += workout.calories || 0;
+        dailyStats[dayName].time += workout.time || workout.duration || 0;
+      }
     });
 
     // 주간 총계
     const weeklyTotal = {
-      workouts: workouts.length,
-      distance: workouts.reduce((sum, w) => sum + (w.distance || 0), 0),
-      time: workouts.reduce((sum, w) => sum + (w.time || 0), 0),
-      calories: workouts.reduce((sum, w) => sum + (w.calories || 0), 0)
+      workouts: weekWorkouts.length,
+      distance: weekWorkouts.reduce((sum, w) => sum + (w.distance || 0), 0),
+      calories: weekWorkouts.reduce((sum, w) => sum + (w.calories || 0), 0),
+      time: weekWorkouts.reduce((sum, w) => sum + (w.time || w.duration || 0), 0)
     };
+
+    console.log('📊 주간 총계:', weeklyTotal);
 
     return {
       dailyStats,
       weeklyTotal,
-      workouts
+      weekWorkouts
     };
   } catch (error) {
     console.error('주간 통계 조회 실패:', error);
-    return null;
+    return {
+      dailyStats: {},
+      weeklyTotal: { workouts: 0, distance: 0, calories: 0, time: 0 },
+      weekWorkouts: []
+    };
   }
 };
 
 /**
- * 월간 운동 통계 조회
+ * 월간 통계 조회
  */
 export const getMonthlyStats = async (year, month) => {
   try {
-    const auth = getAuth();
-    const user = auth.currentUser;
+    // 로컬 스토리지에서 데이터 가져오기
+    const localWorkouts = getLocalWorkouts();
     
-    if (!user) {
-      return null;
-    }
-
     const startDate = new Date(year, month - 1, 1);
-    const endDate = new Date(year, month, 0, 23, 59, 59);
+    const endDate = new Date(year, month, 0);
 
-    const workouts = await getWorkoutsByDateRange(startDate, endDate);
-    
-    // 일별 운동 여부 표시 (캘린더용)
+    // 해당 월 운동 필터링
+    const monthWorkouts = localWorkouts.filter(workout => {
+      const workoutDate = new Date(workout.timestamp || workout.createdAt);
+      return workoutDate >= startDate && workoutDate <= endDate;
+    });
+
+    // 날짜별 그룹핑
     const calendar = {};
-    workouts.forEach(workout => {
-      const date = new Date(workout.createdAt).getDate();
-      if (!calendar[date]) {
-        calendar[date] = {
+    monthWorkouts.forEach(workout => {
+      const workoutDate = new Date(workout.timestamp || workout.createdAt);
+      const day = workoutDate.getDate();
+      
+      if (!calendar[day]) {
+        calendar[day] = {
           workouts: [],
           totalDistance: 0,
           totalCalories: 0
         };
       }
-      calendar[date].workouts.push(workout);
-      calendar[date].totalDistance += workout.distance || 0;
-      calendar[date].totalCalories += workout.calories || 0;
+      
+      calendar[day].workouts.push(workout);
+      calendar[day].totalDistance += workout.distance || 0;
+      calendar[day].totalCalories += workout.calories || 0;
     });
 
     return {
-      year,
-      month,
-      totalWorkouts: workouts.length,
-      totalDistance: workouts.reduce((sum, w) => sum + (w.distance || 0), 0),
-      totalCalories: workouts.reduce((sum, w) => sum + (w.calories || 0), 0),
+      totalWorkouts: monthWorkouts.length,
+      totalDistance: monthWorkouts.reduce((sum, w) => sum + (w.distance || 0), 0),
+      totalCalories: monthWorkouts.reduce((sum, w) => sum + (w.calories || 0), 0),
+      totalTime: monthWorkouts.reduce((sum, w) => sum + (w.time || w.duration || 0), 0),
       calendar,
-      workouts
+      monthWorkouts
     };
   } catch (error) {
     console.error('월간 통계 조회 실패:', error);
-    return null;
+    return {
+      totalWorkouts: 0,
+      totalDistance: 0,
+      totalCalories: 0,
+      totalTime: 0,
+      calendar: {},
+      monthWorkouts: []
+    };
   }
 };
 
 /**
  * 운동 목표 설정
  */
-export const setWorkoutGoals = async (goals) => {
+export const setWorkoutGoals = async (goalsData) => {
   try {
     const auth = getAuth();
     const user = auth.currentUser;
     
     if (!user) {
-      throw new Error('로그인이 필요합니다');
+      // 로컬 스토리지에 저장
+      localStorage.setItem('workoutGoals', JSON.stringify(goalsData));
+      return goalsData;
     }
 
     const goalsRef = doc(db, 'userGoals', user.uid);
-    const goalsData = {
-      ...goals,
+    await setDoc(goalsRef, {
+      ...goalsData,
       userId: user.uid,
       updatedAt: new Date().toISOString()
-    };
-
-    await setDoc(goalsRef, goalsData);
+    });
+    
     return goalsData;
   } catch (error) {
     console.error('목표 설정 실패:', error);
@@ -355,14 +465,18 @@ export const getWorkoutGoals = async () => {
     const user = auth.currentUser;
     
     if (!user) {
-      return null;
-    }
-
-    const goalsRef = doc(db, 'userGoals', user.uid);
-    const goalsSnap = await getDoc(goalsRef);
-    
-    if (goalsSnap.exists()) {
-      return goalsSnap.data();
+      // 로컬 스토리지에서 가져오기
+      const localGoals = localStorage.getItem('workoutGoals');
+      if (localGoals) {
+        return JSON.parse(localGoals);
+      }
+    } else {
+      const goalsRef = doc(db, 'userGoals', user.uid);
+      const goalsSnap = await getDoc(goalsRef);
+      
+      if (goalsSnap.exists()) {
+        return goalsSnap.data();
+      }
     }
     
     // 기본 목표
@@ -374,7 +488,12 @@ export const getWorkoutGoals = async () => {
     };
   } catch (error) {
     console.error('목표 조회 실패:', error);
-    return null;
+    return {
+      weeklyWorkouts: 3,
+      dailyDistance: 5000,
+      dailyCalories: 300,
+      monthlyDistance: 100000
+    };
   }
 };
 
@@ -386,14 +505,8 @@ export const checkAndUpdateAchievements = async (workoutData) => {
     const auth = getAuth();
     const user = auth.currentUser;
     
-    if (!user) {
-      return [];
-    }
-
-    const achievementsRef = doc(db, 'userAchievements', user.uid);
-    const achievementsSnap = await getDoc(achievementsRef);
-    
-    let currentAchievements = achievementsSnap.exists() ? achievementsSnap.data().achievements || [] : [];
+    const achievementsKey = user ? `achievements_${user.uid}` : 'achievements_local';
+    const currentAchievements = JSON.parse(localStorage.getItem(achievementsKey) || '[]');
     const newAchievements = [];
 
     // 거리 업적
@@ -463,12 +576,7 @@ export const checkAndUpdateAchievements = async (workoutData) => {
     // 새로운 업적이 있으면 저장
     if (newAchievements.length > 0) {
       const allAchievementIds = [...currentAchievements, ...newAchievements.map(a => a.id)];
-      await setDoc(achievementsRef, {
-        userId: user.uid,
-        achievements: allAchievementIds,
-        totalAchievements: allAchievementIds.length,
-        lastUpdated: new Date().toISOString()
-      });
+      localStorage.setItem(achievementsKey, JSON.stringify(allAchievementIds));
     }
 
     return newAchievements;

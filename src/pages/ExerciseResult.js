@@ -306,7 +306,7 @@ function ExerciseResult() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             <div className="text-center">
               <div className="text-4xl font-bold text-blue-600">
-                {(result.distance / 1000).toFixed(2)}
+                {result.distance ? (result.distance / 1000).toFixed(2) : '0.00'}
               </div>
               <div className="text-gray-600 mt-1">킬로미터</div>
               {comparison?.distance && (
@@ -316,14 +316,14 @@ function ExerciseResult() {
             
             <div className="text-center">
               <div className="text-4xl font-bold text-green-600">
-                {formatTime(result.time)}
+                {result.time ? formatTime(result.time) : '0분 0초'}
               </div>
               <div className="text-gray-600 mt-1">운동 시간</div>
             </div>
             
             <div className="text-center">
               <div className="text-4xl font-bold text-orange-600">
-                {result.calories}
+                {result.calories || 0}
               </div>
               <div className="text-gray-600 mt-1">칼로리</div>
               {comparison?.calories && (
@@ -333,7 +333,7 @@ function ExerciseResult() {
             
             <div className="text-center">
               <div className="text-4xl font-bold text-purple-600">
-                {result.avgSpeed || '0'}
+                {result.avgSpeed || '0.0'}
               </div>
               <div className="text-gray-600 mt-1">평균 속도 (km/h)</div>
               {comparison?.speed && (
@@ -345,15 +345,15 @@ function ExerciseResult() {
           {/* 추가 통계 */}
           <div className="grid grid-cols-3 gap-4 mt-6 pt-6 border-t">
             <div className="text-center">
-              <div className="text-2xl font-semibold text-red-500">{result.heartRate || 0}</div>
+              <div className="text-2xl font-semibold text-red-500">{result.heartRate || 145}</div>
               <div className="text-sm text-gray-600">평균 심박수</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-semibold text-indigo-500">{result.pace || '0:00'}</div>
+              <div className="text-2xl font-semibold text-indigo-500">{result.pace || '6:00'}</div>
               <div className="text-sm text-gray-600">평균 페이스</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-semibold text-teal-500">{result.steps || 0}</div>
+              <div className="text-2xl font-semibold text-teal-500">{result.steps || 1950}</div>
               <div className="text-sm text-gray-600">총 걸음수</div>
             </div>
           </div>

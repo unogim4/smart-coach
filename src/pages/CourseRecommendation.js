@@ -43,7 +43,39 @@ function CourseRecommendation({ userLocation, weatherData }) {
         });
 
         // 주변 러닝 코스 검색
-        const nearbyCourses = await searchNearbyRunningCourses(location, filters.maxDistance);
+        let nearbyCourses = await searchNearbyRunningCourses(location, filters.maxDistance);
+        
+        // 🌟 온천장 코스 추가 (부산 지역일 때)
+        if (location.lat >= 35.0 && location.lat <= 35.4 && 
+            location.lng >= 128.8 && location.lng <= 129.3) {
+          // 부산 지역이면 온천장 코스 추가
+          const oncheonCourse = {
+            id: 'oncheon-special',
+            name: '🌟 온천장 러닝 코스',
+            distance: 1500,
+            difficulty: DIFFICULTY_LEVELS.EASY,
+            elevation: 15,
+            description: '부드러운 9분 코스, GPS 기반 실시간 트래킹',
+            estimatedTime: '9분',
+            type: 'special',
+            location: {
+              lat: 35.220462,
+              lng: 129.086192
+            },
+            address: '부산 동래구 온천장로',
+            features: ['실시간 GPS 트래킹', '자동 페이스 조절', 'AI 코치 피드백'],
+            isSpecialCourse: true,
+            waypoints: [
+              { lat: 35.220462, lng: 129.086192, label: '시작점' },
+              { lat: 35.229843, lng: 129.091357, label: '경유지' },
+              { lat: 35.234004, lng: 129.091775, label: '도착지' }
+            ]
+          };
+          
+          // 코스 배열 맨 앞에 추가
+          nearbyCourses = [oncheonCourse, ...nearbyCourses];
+        }
+        
         setCourses(nearbyCourses);
       } catch (error) {
         console.error('코스 로딩 실패:', error);
@@ -194,7 +226,20 @@ function CourseRecommendation({ userLocation, weatherData }) {
   
   // 코스 시작 함수 추가
   const handleStartCourse = (course) => {
-    // 코스를 따라 러닝할 수 있도록 경로 생성
+    // 🌟 온천장 코스인 경우 특별 처리
+    if (course.id === 'oncheon-special') {
+      console.log('🏃 온천장 코스 시작!');
+      navigate('/exercise-tracking', {
+        state: {
+          exerciseType: 'running',
+          simulationMode: true,
+          simulationType: 'oncheonCourse'
+        }
+      });
+      return;
+    }
+    
+    // 일반 코스의 경우
     const routeData = {
       name: course.name,
       distance: parseFloat(course.estimatedDistance) * 1000, // km를 미터로 변환
@@ -498,7 +543,11 @@ function CourseRecommendation({ userLocation, weatherData }) {
                 {filteredCourses.map((course, index) => (
                   <div
                     key={course.id}
-                    className={`bg-white rounded-lg shadow-lg overflow-hidden transition-all duration-200 cursor-pointer hover:shadow-xl ${
+                    className={`${
+                      course.isSpecialCourse 
+                        ? 'bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-300' 
+                        : 'bg-white'
+                    } rounded-lg shadow-lg overflow-hidden transition-all duration-200 cursor-pointer hover:shadow-xl ${
                       selectedCourse?.id === course.id ? 'ring-2 ring-blue-500' : ''
                     }`}
                     onClick={() => handleCourseSelect(course)}
@@ -506,10 +555,21 @@ function CourseRecommendation({ userLocation, weatherData }) {
                     <div className="p-6">
                       <div className="flex justify-between items-start mb-4">
                         <div className="flex items-center">
-                          <span className="text-2xl mr-3">{course.icon}</span>
+                          <span className="text-2xl mr-3">
+                            {course.isSpecialCourse ? '🌟' : course.icon}
+                          </span>
                           <div>
-                            <h4 className="text-xl font-semibold text-gray-800">{course.name}</h4>
-                            <p className="text-gray-500 text-sm">{course.vicinity}</p>
+                            <h4 className="text-xl font-semibold text-gray-800">
+                              {course.name}
+                              {course.isSpecialCourse && (
+                                <span className="ml-2 text-xs bg-gradient-to-r from-purple-500 to-pink-500 text-white px-2 py-1 rounded-full">
+                                  추천
+                                </span>
+                              )}
+                            </h4>
+                            <p className="text-gray-500 text-sm">
+                              {course.isSpecialCourse ? course.address : course.vicinity}
+                            </p>
                           </div>
                         </div>
                         <span
@@ -520,10 +580,25 @@ function CourseRecommendation({ userLocation, weatherData }) {
                         </span>
                       </div>
                       
+                      {/* 특별 코스 기능 표시 */}
+                      {course.isSpecialCourse && course.features && (
+                        <div className="mb-4 p-3 bg-white bg-opacity-70 rounded-lg">
+                          <div className="flex flex-wrap gap-2">
+                            {course.features.map((feature, idx) => (
+                              <span key={idx} className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">
+                                ✓ {feature}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
                       {/* 코스 정보 */}
                       <div className="grid grid-cols-3 gap-4 mb-4">
                         <div className="text-center p-3 bg-gray-50 rounded-lg">
-                          <div className="text-lg font-bold text-blue-600">{course.estimatedDistance}</div>
+                          <div className="text-lg font-bold text-blue-600">
+                            {course.estimatedDistance || (course.distance ? `${(course.distance/1000).toFixed(1)}km` : '0km')}
+                          </div>
                           <div className="text-xs text-gray-500">거리</div>
                         </div>
                         <div className="text-center p-3 bg-gray-50 rounded-lg">
@@ -531,7 +606,9 @@ function CourseRecommendation({ userLocation, weatherData }) {
                           <div className="text-xs text-gray-500">예상시간</div>
                         </div>
                         <div className="text-center p-3 bg-gray-50 rounded-lg">
-                          <div className="text-lg font-bold text-orange-600">{course.elevationGain}</div>
+                          <div className="text-lg font-bold text-orange-600">
+                            {course.elevationGain || `${course.elevation || 0}m`}
+                          </div>
                           <div className="text-xs text-gray-500">고도변화</div>
                         </div>
                       </div>
@@ -542,10 +619,14 @@ function CourseRecommendation({ userLocation, weatherData }) {
                           e.stopPropagation();
                           handleStartCourse(course);
                         }}
-                        className="w-full bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-lg transition-colors"
+                        className={`w-full ${
+                          course.isSpecialCourse 
+                            ? 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600' 
+                            : 'bg-green-500 hover:bg-green-600'
+                        } text-white py-2 px-4 rounded-lg transition-colors`}
                       >
                         <i className="fas fa-play mr-2"></i>
-                        코스 시작
+                        {course.isSpecialCourse ? '코스 시작하기' : '코스 시작'}
                       </button>
                     </div>
                   </div>

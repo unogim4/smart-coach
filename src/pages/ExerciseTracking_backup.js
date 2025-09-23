@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ONCHEONJANG_RUNNING_COURSE, generateSimulationData, updateSimulationData } from '../services/simulation/oncheonCourseSimulation';
-import { GEUMJEONG_COURSE, DONGNAE_COURSE, generateCourse1SimulationData, generateCourse2SimulationData, updateCourseSimulationData } from '../services/courses/additionalCourses';
 
 // 🏃‍♂️ 실시간 운동 트래킹 페이지
 function ExerciseTracking() {
@@ -54,12 +53,11 @@ function ExerciseTracking() {
   // 시뮬레이션 관련
   const simulationDataRef = useRef(null);
   const simulationIntervalRef = useRef(null);
-  const isExercisingRef = useRef(false); // 🔥 중요: useRef로 추가
 
   // 컴포넌트 마운트 시 자동으로 GPS 시작
   useEffect(() => {
     console.log('🏃 ExerciseTracking 페이지 로드됨');
-    console.log('운동 타입:', exerciseType);
+    console.log('시뮬레이션 모드:', simulationMode, '타입:', simulationType);
     
     // 1초 후 자동으로 운동 시작
     const autoStartTimer = setTimeout(() => {
@@ -78,36 +76,15 @@ function ExerciseTracking() {
       }
     };
   }, []);
-
-  // 🔥 isExercising 상태가 변경될 때마다 ref도 업데이트
-  useEffect(() => {
-    isExercisingRef.current = isExercising;
-  }, [isExercising]);
   
   // 지도 초기화
   useEffect(() => {
     if (!mapRef.current || !window.google) return;
     
-    // 시뮬레이션 코스에 따라 중심 설정
-    let centerPoint;
-    let course;
-    
-    if (simulationMode) {
-      if (simulationType === 'oncheonCourse') {
-        course = ONCHEONJANG_RUNNING_COURSE;
-        centerPoint = course.path[0];
-      } else if (simulationType === 'geumjeongCourse') {
-        course = GEUMJEONG_COURSE;
-        centerPoint = course.path[0];
-      } else if (simulationType === 'dongnaeCourse') {
-        course = DONGNAE_COURSE;
-        centerPoint = course.path[0];
-      }
-    }
-    
-    if (!centerPoint) {
-      centerPoint = route?.path?.[0] || { lat: 37.5665, lng: 126.9780 };
-    }
+    // 시뮬레이션 모드일 때 온천장 코스로 중심 설정
+    const centerPoint = simulationMode && simulationType === 'oncheonCourse' 
+      ? ONCHEONJANG_RUNNING_COURSE.path[0]
+      : route?.path?.[0] || { lat: 37.5665, lng: 126.9780 };
 
     const map = new window.google.maps.Map(mapRef.current, {
       zoom: simulationMode ? 15 : 17,
@@ -129,8 +106,9 @@ function ExerciseTracking() {
 
     mapInstanceRef.current = map;
 
-    // 시뮬레이션 코스 표시
-    if (simulationMode && course) {
+    // 시뮬레이션 모드일 때 온천장 코스 표시
+    if (simulationMode && simulationType === 'oncheonCourse') {
+      const course = ONCHEONJANG_RUNNING_COURSE;
       const fullPath = course.path.map(p => ({ lat: p.lat, lng: p.lng }));
       
       // 전체 경로 그리기
@@ -159,29 +137,27 @@ function ExerciseTracking() {
         title: '시작점'
       });
       
-      // 경유지 마커들
-      course.path.forEach(point => {
-        if (point.label && point.label !== '시작' && point.label !== '도착') {
-          new window.google.maps.Marker({
-            position: { lat: point.lat, lng: point.lng },
-            map: map,
-            icon: {
-              path: window.google.maps.SymbolPath.CIRCLE,
-              scale: 8,
-              fillColor: '#3B82F6',
-              fillOpacity: 1,
-              strokeColor: '#ffffff',
-              strokeWeight: 2
-            },
-            title: point.label
-          });
-        }
-      });
+      // 회전점 마커
+      const turnPoint = course.path.find(p => p.label === '회전점');
+      if (turnPoint) {
+        new window.google.maps.Marker({
+          position: { lat: turnPoint.lat, lng: turnPoint.lng },
+          map: map,
+          icon: {
+            path: window.google.maps.SymbolPath.BACKWARD_CLOSED_ARROW,
+            scale: 10,
+            fillColor: '#F59E0B',
+            fillOpacity: 1,
+            strokeColor: '#ffffff',
+            strokeWeight: 3
+          },
+          title: '회전점'
+        });
+      }
       
-      // 도착지 마커
-      const arrivalPoint = course.path[course.path.length - 1];
+      // 도착점 마커
       new window.google.maps.Marker({
-        position: arrivalPoint,
+        position: course.path[course.path.length - 1],
         map: map,
         icon: {
           path: window.google.maps.SymbolPath.BACKWARD_CLOSED_ARROW,
@@ -191,8 +167,19 @@ function ExerciseTracking() {
           strokeColor: '#ffffff',
           strokeWeight: 3
         },
-        title: '도착지'
+        title: '도착점'
       });
+    } else if (route?.path) {
+      // 일반 경로 표시
+      const routePath = new window.google.maps.Polyline({
+        path: route.path,
+        geodesic: true,
+        strokeColor: '#3B82F6',
+        strokeOpacity: 0.5,
+        strokeWeight: 6
+      });
+      routePath.setMap(map);
+      routePolylineRef.current = routePath;
     }
 
     // 사용자 위치 마커
@@ -222,27 +209,20 @@ function ExerciseTracking() {
 
   }, [route, simulationMode, simulationType]);
 
-  // 온천장 코스 시뮬레이션 - 🔥 부드러운 움직임 버전
+  // 온천장 코스 시뮬레이션
   const startOncheonCourseSimulation = () => {
-    console.log('📍 온천장 코스 시작!');
+    console.log('🎬 온천장 코스 시뮬레이션 시작!');
     
     // 시뮬레이션 데이터 초기화
     simulationDataRef.current = generateSimulationData();
     
     let elapsedSeconds = 0;
-    const updateInterval = 100; // 0.1초마다 업데이트 (더 부드러운 움직임)
     
-    // 시뮬레이션 인터벌 (0.1초마다 업데이트)
+    // 시뮬레이션 인터벌 (1초마다 업데이트)
     simulationIntervalRef.current = setInterval(() => {
-      // 🔥 중요: isExercisingRef.current 사용
-      if (!isExercisingRef.current || isPaused) {
-        return;
-      }
+      if (!isExercising || isPaused) return;
       
-      elapsedSeconds += updateInterval / 1000; // 초 단위로 변환
-      
-      // 1% 단위로 진행 (540초 = 9분)
-      const progress = Math.min((elapsedSeconds / 540) * 100, 100);
+      elapsedSeconds++;
       
       // 시뮬레이션 데이터 업데이트
       const updatedData = updateSimulationData(simulationDataRef.current, elapsedSeconds);
@@ -253,7 +233,7 @@ function ExerciseTracking() {
       
       if (!currentPoint) {
         // 시뮬레이션 완료
-        console.log('🎯 코스 완료!');
+        console.log('🎯 시뮬레이션 완료!');
         handleSimulationComplete();
         return;
       }
@@ -264,266 +244,60 @@ function ExerciseTracking() {
         lng: currentPoint.lng
       });
       
-      // 지도 업데이트 (부드러운 이동)
+      // 지도 업데이트
       if (userMarkerRef.current && mapInstanceRef.current) {
         const latLng = new window.google.maps.LatLng(currentPoint.lat, currentPoint.lng);
         userMarkerRef.current.setPosition(latLng);
         
-        // 0.5초마다 지도 중심 이동 (너무 자주 움직이면 어지러움)
-        if (Math.floor(elapsedSeconds * 2) % 1 === 0 && !isPaused) {
+        // 지도 중심 이동 (부드럽게)
+        if (!isPaused) {
           mapInstanceRef.current.panTo(latLng);
         }
       }
       
-      // 🔥 운동 데이터 업데이트 - 1초마다만 업데이트
-      if (Math.floor(elapsedSeconds) !== Math.floor(elapsedSeconds - updateInterval / 1000)) {
-        const newExerciseData = {
-          distance: updatedData.totalDistance,
-          time: Math.floor(elapsedSeconds),
-          speed: updatedData.currentSpeed,
-          avgSpeed: updatedData.avgSpeed,
-          maxSpeed: Math.max(exerciseData.maxSpeed || 0, parseFloat(updatedData.currentSpeed)),
-          heartRate: updatedData.currentHeartRate,
-          calories: updatedData.calories,
-          pace: updatedData.pace,
-          altitude: 10 + Math.random() * 5,
-          steps: updatedData.steps
-        };
-        
-        setExerciseData(newExerciseData);
-      }
-      
-      // 진행률 업데이트 (부드럽게)
-      setRouteProgress(progress);
-      
-      // 지나온 경로 업데이트 (0.5초마다)
-      if (elapsedSeconds % 0.5 < updateInterval / 1000) {
-        pathHistoryRef.current.push(currentPoint);
-        if (passedPolylineRef.current) {
-          passedPolylineRef.current.setPath(
-            pathHistoryRef.current.map(p => ({ lat: p.lat, lng: p.lng }))
-          );
-        }
-      }
-      
-      // AI 코치 메시지 (10초마다)
-      if (Math.floor(elapsedSeconds) % 10 === 0 && Math.floor(elapsedSeconds) !== Math.floor(elapsedSeconds - updateInterval / 1000)) {
-        generateCoachFeedback(
-          parseFloat(updatedData.currentSpeed),
-          updatedData.currentHeartRate,
-          elapsedSeconds
-        );
-      }
-      
-      // 9분(540초) 후 자동 종료
-      if (elapsedSeconds >= 540 || updatedData.completed) {
-        handleSimulationComplete();
-      }
-    }, updateInterval); // 0.1초마다 업데이트
-  };
-  
-  // 금정구 코스 시뮬레이션
-  const startGeumjeongCourseSimulation = () => {
-    console.log('📍 금정구 코스 시작!');
-    
-    // 시뮬레이션 데이터 초기화
-    simulationDataRef.current = generateCourse1SimulationData();
-    
-    let elapsedSeconds = 0;
-    const updateInterval = 100; // 0.1초마다 업데이트
-    const targetDuration = 1200; // 20분 = 1200초
-    
-    simulationIntervalRef.current = setInterval(() => {
-      if (!isExercisingRef.current || isPaused) {
-        return;
-      }
-      
-      elapsedSeconds += updateInterval / 1000;
-      const progress = Math.min((elapsedSeconds / targetDuration) * 100, 100);
-      
-      // 시뮬레이션 데이터 업데이트
-      const updatedData = updateCourseSimulationData(simulationDataRef.current, elapsedSeconds);
-      simulationDataRef.current = updatedData;
-      
-      const currentPoint = updatedData.currentPosition;
-      
-      if (!currentPoint || updatedData.completed) {
-        console.log('🎯 코스 완료!');
-        handleSimulationComplete();
-        return;
-      }
-      
-      // 위치 업데이트
-      setCurrentPosition({
-        lat: currentPoint.lat,
-        lng: currentPoint.lng
+      // 운동 데이터 업데이트
+      setExerciseData({
+        distance: updatedData.totalDistance,
+        time: elapsedSeconds,
+        speed: updatedData.currentSpeed,
+        avgSpeed: updatedData.avgSpeed,
+        maxSpeed: Math.max(exerciseData.maxSpeed, parseFloat(updatedData.currentSpeed)),
+        heartRate: updatedData.currentHeartRate,
+        calories: updatedData.calories,
+        pace: updatedData.pace,
+        altitude: 10 + Math.random() * 5,
+        steps: updatedData.steps
       });
       
-      // 지도 업데이트 (부드러운 이동)
-      if (userMarkerRef.current && mapInstanceRef.current) {
-        const latLng = new window.google.maps.LatLng(currentPoint.lat, currentPoint.lng);
-        userMarkerRef.current.setPosition(latLng);
-        
-        if (Math.floor(elapsedSeconds * 2) % 1 === 0 && !isPaused) {
-          mapInstanceRef.current.panTo(latLng);
-        }
-      }
-      
-      // 운동 데이터 업데이트 (1초마다)
-      if (Math.floor(elapsedSeconds) !== Math.floor(elapsedSeconds - updateInterval / 1000)) {
-        setExerciseData({
-          distance: updatedData.totalDistance,
-          time: Math.floor(elapsedSeconds),
-          speed: updatedData.currentSpeed,
-          avgSpeed: updatedData.avgSpeed,
-          maxSpeed: Math.max(exerciseData.maxSpeed || 0, parseFloat(updatedData.currentSpeed)),
-          heartRate: updatedData.currentHeartRate,
-          calories: updatedData.calories,
-          pace: updatedData.pace,
-          altitude: 10 + Math.random() * 5,
-          steps: updatedData.steps
-        });
-      }
-      
-      setRouteProgress(progress);
+      // 진행률 업데이트
+      setRouteProgress(updatedData.progress);
       
       // 지나온 경로 업데이트
-      if (elapsedSeconds % 0.5 < updateInterval / 1000) {
-        pathHistoryRef.current.push(currentPoint);
-        if (passedPolylineRef.current) {
-          passedPolylineRef.current.setPath(
-            pathHistoryRef.current.map(p => ({ lat: p.lat, lng: p.lng }))
-          );
-        }
-      }
-      
-      // AI 코치 메시지 (10초마다)
-      if (Math.floor(elapsedSeconds) % 10 === 0 && Math.floor(elapsedSeconds) !== Math.floor(elapsedSeconds - updateInterval / 1000)) {
-        generateCoachFeedback(
-          parseFloat(updatedData.currentSpeed),
-          updatedData.currentHeartRate,
-          elapsedSeconds
+      pathHistoryRef.current.push(currentPoint);
+      if (passedPolylineRef.current) {
+        passedPolylineRef.current.setPath(
+          pathHistoryRef.current.map(p => ({ lat: p.lat, lng: p.lng }))
         );
       }
       
-      if (elapsedSeconds >= targetDuration || updatedData.completed) {
+      // AI 코치 메시지
+      generateCoachFeedback(
+        parseFloat(updatedData.currentSpeed),
+        updatedData.currentHeartRate,
+        elapsedSeconds
+      );
+      
+      // 30분(1800초) 후 자동 종료
+      if (elapsedSeconds >= 1800) {
         handleSimulationComplete();
       }
-    }, updateInterval);
+    }, 1000); // 1초마다 업데이트
   };
   
-  // 동래구 코스 시뮬레이션
-  const startDongnaeCourseSimulation = () => {
-    console.log('📍 동래구 코스 시작!');
-    
-    // 시믌레이션 데이터 초기화
-    simulationDataRef.current = generateCourse2SimulationData();
-    
-    let elapsedSeconds = 0;
-    const updateInterval = 100; // 0.1초마다 업데이트
-    const targetDuration = 2100; // 35분 = 2100초
-    
-    simulationIntervalRef.current = setInterval(() => {
-      if (!isExercisingRef.current || isPaused) {
-        return;
-      }
-      
-      elapsedSeconds += updateInterval / 1000;
-      const progress = Math.min((elapsedSeconds / targetDuration) * 100, 100);
-      
-      // 시뮬레이션 데이터 업데이트
-      const updatedData = updateCourseSimulationData(simulationDataRef.current, elapsedSeconds);
-      simulationDataRef.current = updatedData;
-      
-      const currentPoint = updatedData.currentPosition;
-      
-      if (!currentPoint || updatedData.completed) {
-        console.log('🎯 코스 완료!');
-        handleSimulationComplete();
-        return;
-      }
-      
-      // 위치 업데이트
-      setCurrentPosition({
-        lat: currentPoint.lat,
-        lng: currentPoint.lng
-      });
-      
-      // 지도 업데이트 (부드러운 이동)
-      if (userMarkerRef.current && mapInstanceRef.current) {
-        const latLng = new window.google.maps.LatLng(currentPoint.lat, currentPoint.lng);
-        userMarkerRef.current.setPosition(latLng);
-        
-        if (Math.floor(elapsedSeconds * 2) % 1 === 0 && !isPaused) {
-          mapInstanceRef.current.panTo(latLng);
-        }
-      }
-      
-      // 운동 데이터 업데이트 (1초마다)
-      if (Math.floor(elapsedSeconds) !== Math.floor(elapsedSeconds - updateInterval / 1000)) {
-        setExerciseData({
-          distance: updatedData.totalDistance,
-          time: Math.floor(elapsedSeconds),
-          speed: updatedData.currentSpeed,
-          avgSpeed: updatedData.avgSpeed,
-          maxSpeed: Math.max(exerciseData.maxSpeed || 0, parseFloat(updatedData.currentSpeed)),
-          heartRate: updatedData.currentHeartRate,
-          calories: updatedData.calories,
-          pace: updatedData.pace,
-          altitude: 10 + Math.random() * 5,
-          steps: updatedData.steps
-        });
-      }
-      
-      setRouteProgress(progress);
-      
-      // 지나온 경로 업데이트
-      if (elapsedSeconds % 0.5 < updateInterval / 1000) {
-        pathHistoryRef.current.push(currentPoint);
-        if (passedPolylineRef.current) {
-          passedPolylineRef.current.setPath(
-            pathHistoryRef.current.map(p => ({ lat: p.lat, lng: p.lng }))
-          );
-        }
-      }
-      
-      // AI 코치 메시지 (15초마다 - 장거리 코스)
-      if (Math.floor(elapsedSeconds) % 15 === 0 && Math.floor(elapsedSeconds) !== Math.floor(elapsedSeconds - updateInterval / 1000)) {
-        generateCoachFeedback(
-          parseFloat(updatedData.currentSpeed),
-          updatedData.currentHeartRate,
-          elapsedSeconds
-        );
-      }
-      
-      if (elapsedSeconds >= targetDuration || updatedData.completed) {
-        handleSimulationComplete();
-      }
-    }, updateInterval);
-  };
+  // 시뮬레이션 완료 처리
   const handleSimulationComplete = () => {
     clearInterval(simulationIntervalRef.current);
     simulationIntervalRef.current = null;
-    
-    // 최종 데이터 확인
-    if (simulationDataRef.current) {
-      const finalData = simulationDataRef.current;
-      console.log('시뮬레이션 완료 데이터:', finalData);
-      
-      // 최종 데이터로 운동 데이터 업데이트
-      setExerciseData({
-        distance: finalData.totalDistance || 1500,
-        time: finalData.elapsedTime || 540,
-        speed: parseFloat(finalData.currentSpeed) || 10,
-        avgSpeed: parseFloat(finalData.avgSpeed) || 10,
-        maxSpeed: 11.5,
-        heartRate: finalData.currentHeartRate || 145,
-        calories: finalData.calories || 75,
-        pace: finalData.pace || '6:00',
-        altitude: 10,
-        steps: finalData.steps || 1950
-      });
-    }
     
     setCoachMessage('🎉 목표를 달성했습니다! 수고하셨습니다!');
     setAlerts(prev => [...prev, {
@@ -541,29 +315,151 @@ function ExerciseTracking() {
   // GPS 위치가 없을 때를 위한 시뮬레이션 모드
   const startSimulationMode = () => {
     console.log('🎮 시뮬레이션 모드로 실행');
-    setGpsStatus('연결됨');
+    setGpsStatus('시뮬레이션');
     
-    // 코스별 시뮬레이션
+    // 온천장 코스 시뮬레이션인 경우
     if (simulationType === 'oncheonCourse') {
-      console.log('🏃 온천장 코스 시작!');
+      console.log('🏃 온천장 코스 시뮬레이션 시작!');
       startOncheonCourseSimulation();
-    } else if (simulationType === 'geumjeongCourse') {
-      console.log('🏃 금정구 코스 시작!');
-      startGeumjeongCourseSimulation();
-    } else if (simulationType === 'dongnaeCourse') {
-      console.log('🏃 동래구 코스 시작!');
-      startDongnaeCourseSimulation();
+      return;
     }
+    
+    // 기본 시뮬레이션 (기존 코드 유지)
+    let simLat = route?.path?.[0]?.lat || 35.1796;
+    let simLng = route?.path?.[0]?.lng || 129.0756;
+    let pathIndex = 0;
+    
+    const simInterval = setInterval(() => {
+      if (!isExercising || isPaused) return;
+      
+      if (route?.path && pathIndex < route.path.length) {
+        const targetPoint = route.path[pathIndex];
+        simLat += (targetPoint.lat - simLat) * 0.1;
+        simLng += (targetPoint.lng - simLng) * 0.1;
+        
+        if (Math.abs(targetPoint.lat - simLat) < 0.0001) {
+          pathIndex++;
+        }
+      } else {
+        simLat += (Math.random() - 0.5) * 0.0001;
+        simLng += (Math.random() - 0.5) * 0.0001;
+      }
+      
+      const simPosition = {
+        lat: simLat,
+        lng: simLng,
+        altitude: 10 + Math.random() * 5,
+        accuracy: 10,
+        speed: 2 + Math.random(),
+        timestamp: Date.now()
+      };
+      
+      setCurrentPosition(simPosition);
+      setGpsAccuracy(10);
+      
+      if (userMarkerRef.current && mapInstanceRef.current) {
+        const latLng = new window.google.maps.LatLng(simPosition.lat, simPosition.lng);
+        userMarkerRef.current.setPosition(latLng);
+        mapInstanceRef.current.panTo(latLng);
+      }
+      
+      updateExerciseData(simPosition);
+      updateRouteProgress(simPosition);
+      pathHistoryRef.current.push(simPosition);
+      
+      if (passedPolylineRef.current) {
+        passedPolylineRef.current.setPath(
+          pathHistoryRef.current.map(p => ({ lat: p.lat, lng: p.lng }))
+        );
+      }
+    }, 1000);
+    
+    window.simulationInterval = simInterval;
   };
   
   // GPS 위치 추적 시작
   const startGPSTracking = () => {
-    // GPS 모드 시작
+    // 시뮬레이션 모드인 경우 바로 시뮬레이션 시작
     if (simulationMode) {
-      console.log('📱 GPS 트래킹 시작');
+      console.log('📱 시뮬레이션 모드 활성화');
       startSimulationMode();
       return;
     }
+    
+    if (!navigator.geolocation) {
+      alert('GPS를 사용할 수 없습니다');
+      return;
+    }
+
+    console.log('📍 GPS 추적 시작...');
+    setGpsStatus('연결중...');
+    
+    const options = {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 0
+    };
+
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (position) => {
+        console.log('📍 GPS 위치 업데이트:', position.coords);
+        const newPosition = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          altitude: position.coords.altitude || 0,
+          accuracy: position.coords.accuracy,
+          speed: position.coords.speed || 0,
+          timestamp: position.timestamp
+        };
+
+        setCurrentPosition(newPosition);
+        setGpsAccuracy(Math.round(position.coords.accuracy));
+        setGpsStatus('연결됨');
+
+        if (userMarkerRef.current && mapInstanceRef.current) {
+          const latLng = new window.google.maps.LatLng(newPosition.lat, newPosition.lng);
+          userMarkerRef.current.setPosition(latLng);
+          
+          if (!isPaused) {
+            mapInstanceRef.current.panTo(latLng);
+          }
+        }
+
+        if (isExercising && !isPaused) {
+          updateExerciseData(newPosition);
+          updateRouteProgress(newPosition);
+          pathHistoryRef.current.push(newPosition);
+          
+          if (passedPolylineRef.current) {
+            passedPolylineRef.current.setPath(
+              pathHistoryRef.current.map(p => ({ lat: p.lat, lng: p.lng }))
+            );
+          }
+        }
+      },
+      (error) => {
+        console.error('GPS 에러:', error);
+        setGpsStatus('오류');
+        
+        switch(error.code) {
+          case error.PERMISSION_DENIED:
+            alert('위치 권한을 허용해주세요. 시뮬레이션 모드로 전환합니다.');
+            startSimulationMode();
+            break;
+          case error.POSITION_UNAVAILABLE:
+            alert('위치 정보를 사용할 수 없습니다. 시뮬레이션 모드로 전환합니다.');
+            startSimulationMode();
+            break;
+          case error.TIMEOUT:
+            setGpsStatus('시간초과 - 시뮬레이션 모드로 전환');
+            startSimulationMode();
+            break;
+          default:
+            break;
+        }
+      },
+      options
+    );
   };
 
   // GPS 추적 중지
@@ -582,6 +478,117 @@ function ExerciseTracking() {
     if (simulationIntervalRef.current) {
       clearInterval(simulationIntervalRef.current);
       simulationIntervalRef.current = null;
+    }
+  };
+
+  // 운동 데이터 업데이트
+  const updateExerciseData = (position) => {
+    const currentTime = Date.now();
+    
+    if (!startTimeRef.current) {
+      startTimeRef.current = currentTime;
+      console.log('⏱️ 운동 시작 시간 설정');
+    }
+
+    const elapsedTime = Math.floor((currentTime - startTimeRef.current) / 1000);
+    
+    if (pathHistoryRef.current.length > 0) {
+      const lastPosition = pathHistoryRef.current[pathHistoryRef.current.length - 1];
+      const distance = calculateDistance(lastPosition, position);
+      
+      if (distance < 100) {
+        distanceAccumulator.current += distance;
+      }
+    }
+
+    const speed = position.speed ? position.speed * 3.6 : 
+                 (distanceAccumulator.current / elapsedTime) * 3.6;
+    
+    const paceSeconds = speed > 0 ? 3600 / speed : 0;
+    const paceMinutes = Math.floor(paceSeconds / 60);
+    const paceSecondsRemainder = Math.floor(paceSeconds % 60);
+    
+    const met = exerciseType === 'running' ? 9.8 : 
+                exerciseType === 'cycling' ? 7.5 : 3.5;
+    const calories = (met * 70 * (elapsedTime / 3600));
+    
+    const baseHR = 60;
+    const exerciseHR = Math.min(180, baseHR + speed * 5 + Math.random() * 10);
+    
+    const steps = exerciseType !== 'cycling' ? 
+                 Math.floor(distanceAccumulator.current * 1.3) : 0;
+
+    setExerciseData(prev => ({
+      distance: distanceAccumulator.current,
+      time: elapsedTime,
+      speed: speed.toFixed(1),
+      avgSpeed: (distanceAccumulator.current / elapsedTime * 3.6).toFixed(1),
+      maxSpeed: Math.max(prev.maxSpeed, speed).toFixed(1),
+      heartRate: Math.round(exerciseHR),
+      calories: Math.round(calories),
+      pace: `${paceMinutes}:${paceSecondsRemainder.toString().padStart(2, '0')}`,
+      altitude: position.altitude || 0,
+      steps: steps
+    }));
+
+    generateCoachFeedback(speed, exerciseHR, elapsedTime);
+  };
+
+  // 경로 진행 상황 업데이트
+  const updateRouteProgress = (position) => {
+    if (!route?.path) return;
+
+    let minDistance = Infinity;
+    let closestIndex = 0;
+    
+    route.path.forEach((point, index) => {
+      const distance = calculateDistance(position, point);
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestIndex = index;
+      }
+    });
+
+    const progress = (closestIndex / route.path.length) * 100;
+    setRouteProgress(progress);
+
+    if (route.instructions && closestIndex < route.path.length - 1) {
+      const nextPoint = route.path[closestIndex + 1];
+      const distanceToNext = calculateDistance(position, nextPoint);
+      setDistanceToNext(Math.round(distanceToNext));
+      
+      updateNavigationInstructions(closestIndex, distanceToNext);
+    }
+
+    if (progress > 95) {
+      handleArrival();
+    }
+  };
+
+  // 네비게이션 안내 업데이트
+  const updateNavigationInstructions = (currentIndex, distance) => {
+    if (!route?.instructions) return;
+
+    const currentStep = Math.floor(currentIndex / (route.path.length / route.instructions.length));
+    const instruction = route.instructions[currentStep];
+    const nextInst = route.instructions[currentStep + 1];
+
+    if (instruction) {
+      if (distance < 50) {
+        setCurrentInstruction(`🔔 ${distance}m 후 ${instruction.text}`);
+        
+        if ('speechSynthesis' in window && distance < 30) {
+          const utterance = new SpeechSynthesisUtterance(instruction.text);
+          utterance.lang = 'ko-KR';
+          window.speechSynthesis.speak(utterance);
+        }
+      } else {
+        setCurrentInstruction(`📍 ${distance}m 직진`);
+      }
+    }
+
+    if (nextInst) {
+      setNextInstruction(`다음: ${nextInst.text}`);
     }
   };
 
@@ -635,7 +642,7 @@ function ExerciseTracking() {
     return R * c;
   };
 
-  // 🔥 운동 시작 - 수정된 버전
+  // 운동 시작
   const startExercise = () => {
     console.log('🏃 운동 시작!');
     setIsExercising(true);
@@ -643,14 +650,11 @@ function ExerciseTracking() {
     startTimeRef.current = Date.now();
     pathHistoryRef.current = [];
     distanceAccumulator.current = 0;
+    startGPSTracking();
     setCoachMessage('운동을 시작합니다! 화이팅! 💪');
     
-    // 🔥 중요: GPS 추적을 먼저 시작
-    startGPSTracking();
-    
-    // 시간 업데이트 인터벌
     const timeInterval = setInterval(() => {
-      if (!isPaused && isExercisingRef.current) {
+      if (!isPaused) {
         setExerciseData(prev => ({
           ...prev,
           time: Math.floor((Date.now() - startTimeRef.current) / 1000)
@@ -676,8 +680,6 @@ function ExerciseTracking() {
   // 운동 종료
   const stopExercise = () => {
     console.log('🎯 운동 종료');
-    console.log('최종 운동 데이터:', exerciseData);
-    
     setIsExercising(false);
     setIsPaused(false);
     stopGPSTracking();
@@ -687,29 +689,13 @@ function ExerciseTracking() {
       window.exerciseTimeInterval = null;
     }
     
-    // 시뮬레이션 데이터 확인 및 보정
-    const finalData = simulationType === 'oncheonCourse' && simulationDataRef.current ? {
-      distance: simulationDataRef.current.totalDistance || exerciseData.distance,
-      time: exerciseData.time || 540, // 기본 9분
-      speed: simulationDataRef.current.currentSpeed || exerciseData.speed,
-      avgSpeed: simulationDataRef.current.avgSpeed || exerciseData.avgSpeed,
-      maxSpeed: exerciseData.maxSpeed || 11.5,
-      heartRate: simulationDataRef.current.currentHeartRate || exerciseData.heartRate || 145,
-      calories: simulationDataRef.current.calories || exerciseData.calories,
-      pace: simulationDataRef.current.pace || exerciseData.pace,
-      altitude: exerciseData.altitude || 10,
-      steps: simulationDataRef.current.steps || exerciseData.steps
-    } : exerciseData;
-    
     const result = {
-      ...finalData,
+      ...exerciseData,
       route: pathHistoryRef.current,
       date: new Date().toISOString(),
-      courseName: simulationType === 'oncheonCourse' ? '온천장 러닝 코스' : '자유 러닝',
-      exerciseType: exerciseType
+      courseName: simulationType === 'oncheonCourse' ? '온천장 러닝 코스' : '자유 러닝'
     };
     
-    console.log('전달할 결과 데이터:', result);
     navigate('/exercise-result', { state: { result } });
   };
 
@@ -783,29 +769,26 @@ function ExerciseTracking() {
         <div className="absolute top-4 left-4 bg-white rounded-lg shadow-lg p-2">
           <div className="flex items-center space-x-2">
             <div className={`w-3 h-3 rounded-full ${
-              gpsStatus === '연결됨' || simulationMode ? 'bg-green-500' : 
+              gpsStatus === '연결됨' ? 'bg-green-500' : 
               gpsStatus === '연결중...' ? 'bg-yellow-500 animate-pulse' : 
+              gpsStatus === '시뮬레이션' ? 'bg-purple-500 animate-pulse' :
               'bg-red-500'
             }`}></div>
             <span className="text-sm font-medium">
-              GPS: {simulationMode ? '연결됨' : gpsStatus}
+              {simulationMode ? '시뮬레이션' : `GPS: ${gpsStatus}`}
             </span>
-            {(gpsAccuracy > 0 || simulationMode) && (
-              <span className="text-xs text-gray-500">(±{simulationMode ? '5' : gpsAccuracy}m)</span>
+            {gpsAccuracy > 0 && !simulationMode && (
+              <span className="text-xs text-gray-500">(±{gpsAccuracy}m)</span>
             )}
           </div>
         </div>
 
-        {/* 코스 이름 표시 (시뮬레이션 언급 제거) */}
-        {simulationType && (
-          <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white rounded-lg shadow-lg px-4 py-2">
+        {/* 시뮬레이션 모드 표시 */}
+        {simulationMode && (
+          <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-purple-600 text-white rounded-lg shadow-lg px-4 py-2">
             <div className="flex items-center space-x-2">
-              <div>📍</div>
-              <span className="text-sm font-bold">
-                {simulationType === 'oncheonCourse' && '온천장 러닝 코스'}
-                {simulationType === 'geumjeongCourse' && '금정구 편도 코스'}
-                {simulationType === 'dongnaeCourse' && '동래구 순환 코스'}
-              </span>
+              <div className="animate-pulse">🎬</div>
+              <span className="text-sm font-bold">온천장 코스 시뮬레이션 모드</span>
             </div>
           </div>
         )}
