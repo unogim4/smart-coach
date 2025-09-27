@@ -39,7 +39,7 @@ function Header({ currentScreen, changeScreen }) {
           {/* 로고 */}
           <div className="flex items-center">
             <i className="fas fa-running text-2xl mr-3"></i>
-            <h1 className="text-2xl font-bold">스마트 러닝 & 바이크 코치</h1>
+            <h1 className="text-2xl font-bold">스마트 러닝 코치</h1>
           </div>
 
           {/* 네비게이션 메뉴 */}

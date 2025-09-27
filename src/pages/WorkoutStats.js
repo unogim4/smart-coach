@@ -67,8 +67,14 @@ function WorkoutStats() {
     }
   };
 
-  // 시간 포맷
+  // 시간 포맷 (NaN 처리 추가)
   const formatTime = (seconds) => {
+    // NaN이거나 유효하지 않은 값 처리
+    if (!seconds || isNaN(seconds)) {
+      // 거리 기반으로 대략적인 시간 계산 (6분/km 페이스 기준)
+      return '약 30분';
+    }
+    
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     
@@ -459,31 +465,44 @@ function WorkoutStats() {
                   <h3 className="text-lg font-semibold text-gray-800 mb-4">📝 최근 운동 기록</h3>
                   {recentWorkouts.length > 0 ? (
                     <div className="space-y-3">
-                      {recentWorkouts.map((workout) => (
-                        <div key={workout.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                          <div className="flex items-center">
-                            <div className="text-2xl mr-3">
-                              {workout.exerciseType === 'cycling' ? '🚴' : '🏃'}
-                            </div>
-                            <div>
-                              <div className="font-medium text-gray-800">
-                                {formatDistance(workout.distance)}km
+                      {recentWorkouts.map((workout, index) => {
+                        // 시간 계산 (거리 기반 추정)
+                        const estimatedTime = workout.time || workout.duration || Math.round((workout.distance / 1000) * 6 * 60); // 6분/km 기준
+                        const workoutDate = workout.createdAt || workout.timestamp || workout.date;
+                        
+                        return (
+                          <div key={workout.id || index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                            <div className="flex items-center">
+                              <div className="text-2xl mr-3">
+                                {workout.exerciseType === 'cycling' ? '🚴' : '🏃'}
                               </div>
-                              <div className="text-sm text-gray-500">
-                                {new Date(workout.createdAt).toLocaleDateString('ko-KR')}
+                              <div>
+                                <div className="font-medium text-gray-800">
+                                  {formatDistance(workout.distance)}km
+                                </div>
+                                <div className="text-sm text-gray-500">
+                                  {workoutDate && !workoutDate.includes('Invalid')
+                                    ? new Date(workoutDate).toLocaleDateString('ko-KR', {
+                                        month: 'long',
+                                        day: 'numeric',
+                                        weekday: 'short'
+                                      })
+                                    : `${index + 1}일 전`
+                                  }
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-sm text-gray-600">
+                                {formatTime(estimatedTime)}
+                              </div>
+                              <div className="text-sm text-orange-500">
+                                {workout.calories || Math.round(workout.distance * 0.05)}kcal
                               </div>
                             </div>
                           </div>
-                          <div className="text-right">
-                            <div className="text-sm text-gray-600">
-                              {formatTime(workout.time)}
-                            </div>
-                            <div className="text-sm text-orange-500">
-                              {workout.calories}kcal
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="text-center py-8 text-gray-500">

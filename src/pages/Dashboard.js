@@ -71,9 +71,9 @@ function Dashboard({ userLocation, weatherData, setWeatherData, changeScreen }) 
           </div>
           <div className="text-right">
             <div className="text-3xl font-bold">
-              {((userStats?.totalDistance || 0) / 1000).toFixed(1)}km
+              {((weeklyStats?.weeklyTotal?.distance || 0) / 1000).toFixed(1)}km
             </div>
-            <div className="text-blue-200">오늘 운동 거리</div>
+            <div className="text-blue-200">이번 주 운동 거리</div>
           </div>
         </div>
       </div>
@@ -145,7 +145,7 @@ function Dashboard({ userLocation, weatherData, setWeatherData, changeScreen }) 
       <div className="bg-white rounded-lg shadow-lg p-6">
         <h3 className="text-lg font-semibold text-gray-700 mb-4">🚀 빠른 운동 시작</h3>
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* 자유 러닝 */}
           <div className="border-2 border-blue-200 rounded-lg p-4 hover:border-blue-500 transition-colors">
             <div className="text-center">
@@ -165,30 +165,11 @@ function Dashboard({ userLocation, weatherData, setWeatherData, changeScreen }) 
             </div>
           </div>
 
-          {/* 자유 사이클링 */}
-          <div className="border-2 border-green-200 rounded-lg p-4 hover:border-green-500 transition-colors">
-            <div className="text-center">
-              <div className="text-4xl mb-2">🚴‍♀️</div>
-              <h4 className="font-semibold text-gray-800 mb-2">자유 사이클링</h4>
-              <p className="text-gray-600 text-sm mb-4">
-                GPS로 경로를 추적하며<br/>자유롭게 자전거 타기
-              </p>
-              <button 
-                onClick={() => navigate('/exercise-tracking', {
-                  state: { exerciseType: 'cycling', route: null }
-                })}
-                className="w-full bg-green-500 hover:bg-green-600 text-white py-2 rounded-lg transition-colors"
-              >
-                시작하기
-              </button>
-            </div>
-          </div>
-
           {/* 코스 선택 */}
           <div className="border-2 border-purple-200 rounded-lg p-4 hover:border-purple-500 transition-colors">
             <div className="text-center">
               <div className="text-4xl mb-2">🗺️</div>
-              <h4 className="font-semibold text-gray-800 mb-2">코스 운동</h4>
+              <h4 className="font-semibold text-gray-800 mb-2">코스 러닝</h4>
               <p className="text-gray-600 text-sm mb-4">
                 추천 코스를 선택하고<br/>네비게이션 받기
               </p>

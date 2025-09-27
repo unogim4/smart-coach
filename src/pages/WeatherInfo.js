@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { getCurrentWeather, getWeatherForecast, getAirQuality, getLocationInfo, getExerciseRecommendation } from '../services/weatherService';
+import { getCurrentWeather, getWeatherForecast, getAirQuality, getLocationInfo } from '../services/weatherService';
+import { getAIExerciseRecommendation } from '../services/aiWeatherRecommendation';
 
 function WeatherInfo({ userLocation, weatherData, setWeatherData }) {
   const [forecast, setForecast] = useState([]);
@@ -64,8 +65,8 @@ function WeatherInfo({ userLocation, weatherData, setWeatherData }) {
       setAirQuality(airQualityData);
       setLocationInfo(location);
       
-      // 운동 추천 생성
-      const recommendation = getExerciseRecommendation(currentWeather, airQualityData);
+      // AI 운동 추천 생성
+      const recommendation = getAIExerciseRecommendation(currentWeather, airQualityData);
       setExerciseRecommendation(recommendation);
       
       setLastUpdated(new Date());
@@ -222,20 +223,89 @@ function WeatherInfo({ userLocation, weatherData, setWeatherData }) {
         </div>
       )}
 
-      {/* 운동 추천 */}
+      {/* AI 운동 추천 */}
       {exerciseRecommendation && (
-        <div className="bg-white rounded-lg shadow-lg p-6">
-          <h3 className="text-xl font-semibold text-gray-800 mb-4">오늘의 운동 추천</h3>
+        <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg shadow-lg p-6 border border-purple-200">
+          <div className="flex items-center mb-4">
+            <i className="fas fa-robot text-3xl text-purple-600 mr-3"></i>
+            <h3 className="text-xl font-semibold text-gray-800">AI 코치 날씨 분석</h3>
+          </div>
           
-          <div className={`bg-${exerciseRecommendation.color}-50 border border-${exerciseRecommendation.color}-200 rounded-lg p-6`}>
-            <div className="flex items-center mb-4">
+          <div className={`bg-white rounded-lg p-6 border-l-4 border-${exerciseRecommendation.color}-500`}>
+            <div className="flex items-start mb-4">
               <i className={`${exerciseRecommendation.icon} text-3xl text-${exerciseRecommendation.color}-500 mr-4`}></i>
-              <div>
-                <div className="text-xl font-bold text-gray-800">{exerciseRecommendation.recommendation}</div>
-                <div className={`text-${exerciseRecommendation.color}-600`}>{exerciseRecommendation.type}</div>
+              <div className="flex-1">
+                <div className="text-xl font-bold text-gray-800 mb-2">
+                  {exerciseRecommendation.recommendation}
+                </div>
+                <div className={`inline-block px-3 py-1 rounded-full text-sm font-medium bg-${exerciseRecommendation.color}-100 text-${exerciseRecommendation.color}-800`}>
+                  {exerciseRecommendation.type}
+                </div>
               </div>
             </div>
-            <div className="text-gray-700">{exerciseRecommendation.reason}</div>
+            
+            <div className="space-y-3">
+              <div className="flex items-start">
+                <i className="fas fa-info-circle text-blue-500 mr-2 mt-1"></i>
+                <div>
+                  <div className="font-medium text-gray-800">날씨 분석</div>
+                  <div className="text-gray-700">{exerciseRecommendation.reason}</div>
+                </div>
+              </div>
+              
+              {exerciseRecommendation.tips && exerciseRecommendation.tips.length > 0 && (
+                <div className="flex items-start">
+                  <i className="fas fa-lightbulb text-yellow-500 mr-2 mt-1"></i>
+                  <div>
+                    <div className="font-medium text-gray-800">AI 코치 팁</div>
+                    <ul className="text-gray-700 space-y-1">
+                      {exerciseRecommendation.tips.map((tip, index) => (
+                        <li key={index} className="flex items-start">
+                          <span className="text-purple-500 mr-2">•</span>
+                          <span>{tip}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+              
+              {exerciseRecommendation.warning && (
+                <div className="flex items-start bg-yellow-50 rounded-lg p-3">
+                  <i className="fas fa-exclamation-triangle text-yellow-600 mr-2 mt-1"></i>
+                  <div>
+                    <div className="font-medium text-yellow-800">주의사항</div>
+                    <div className="text-yellow-700">{exerciseRecommendation.warning}</div>
+                  </div>
+                </div>
+              )}
+              
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-sm text-gray-600">추천 운동 시간:</span>
+                    <span className="ml-2 font-medium text-gray-800">
+                      {exerciseRecommendation.bestTime || '오전 6-8시, 오후 6-8시'}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-sm text-gray-600">운동 가능도:</span>
+                    <span className="ml-2">
+                      {[...Array(5)].map((_, i) => (
+                        <i 
+                          key={i}
+                          className={`fas fa-star text-sm ${
+                            i < (exerciseRecommendation.rating || 3) 
+                              ? 'text-yellow-500' 
+                              : 'text-gray-300'
+                          }`}
+                        ></i>
+                      ))}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

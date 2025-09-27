@@ -156,6 +156,7 @@ export function generateWeeklyWorkoutData(userId = 'demo_user') {
       id: `workout_${workoutDate.getTime()}`,
       userId: userId,
       timestamp: workoutDate.toISOString(),
+      createdAt: workoutDate.toISOString(),  // WorkoutStats 호환성
       date: workoutDate.toLocaleDateString('ko-KR'),
       time: workoutDate.toLocaleTimeString('ko-KR'),
       
@@ -163,6 +164,7 @@ export function generateWeeklyWorkoutData(userId = 'demo_user') {
       exerciseType: 'running',
       distance: distance,
       duration: duration,
+      time: duration,  // WorkoutStats 호환성을 위해 추가
       calories: calories,
       avgSpeed: avgSpeed,
       maxSpeed: avgSpeed + 1.5 + Math.random() * 2,
