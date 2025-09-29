@@ -45,9 +45,93 @@ function CourseRecommendation({ userLocation, weatherData }) {
         // 주변 러닝 코스 검색
         let nearbyCourses = await searchNearbyRunningCourses(location, filters.maxDistance);
         
-        // 🌟 특별 코스들 추가 (부산 지역일 때)
-        if (location.lat >= 35.0 && location.lat <= 35.4 && 
-            location.lng >= 128.8 && location.lng <= 129.3) {
+        // 🌟 특별 코스들 추가
+        // 김해 인제대학교 지역 확인
+        if (Math.abs(location.lat - 35.245) < 0.015 && 
+            Math.abs(location.lng - 128.903) < 0.015) {
+          // 인제대학교 김해캠퍼스 지역
+          console.log('🎓 인제대학교 지역 감지!');
+          const injeCoursesSpecial = [
+            {
+              id: 'inje-course-1',
+              name: '🌳 활천로 트레킹 코스',
+              distance: 2850,
+              difficulty: DIFFICULTY_LEVELS.MEDIUM,
+              elevation: 25,
+              description: '인제대 주변 활천로를 따라가는 편도 코스',
+              estimatedTime: '18분',
+              type: 'special',
+              location: {
+                lat: 35.242496,
+                lng: 128.898978
+              },
+              address: '김해시 활천로',
+              features: ['편도 코스', '트레킹 적합', '자연 경관'],
+              isSpecialCourse: true,
+              simulationType: 'injeHwalcheon',
+              waypoints: [
+                { lat: 35.242496, lng: 128.898978, label: '출발' },
+                { lat: 35.242461, lng: 128.905844, label: '중간점' },
+                { lat: 35.244144, lng: 128.914770, label: '도착' }
+              ]
+            },
+            {
+              id: 'inje-course-2',
+              name: '🏘️ 삼안로 순환 코스',
+              distance: 1650,
+              difficulty: DIFFICULTY_LEVELS.EASY,
+              elevation: 10,
+              description: '삼안로를 따라 도는 순환형 러닝 코스',
+              estimatedTime: '10분',
+              type: 'special',
+              location: {
+                lat: 35.251977,
+                lng: 128.904782
+              },
+              address: '김해시 삼안로',
+              features: ['순환 코스', '주택가', '평지', '초보자 적합'],
+              isSpecialCourse: true,
+              simulationType: 'injeSamhan',
+              waypoints: [
+                { lat: 35.251977, lng: 128.904782, label: '출발' },
+                { lat: 35.252099, lng: 128.908376, label: '경유1' },
+                { lat: 35.250347, lng: 128.908473, label: '경유2' },
+                { lat: 35.251320, lng: 128.912078, label: '도착' }
+              ]
+            },
+            {
+              id: 'inje-course-3',
+              name: '🎓 캠퍼스 둘레길',
+              distance: 2200,
+              difficulty: DIFFICULTY_LEVELS.EASY,
+              elevation: 15,
+              description: '인제대학교 캠퍼스를 한 바퀴 도는 코스',
+              estimatedTime: '13분',
+              type: 'special',
+              location: {
+                lat: 35.245000,
+                lng: 128.903000
+              },
+              address: '인제대학교 김해캠퍼스',
+              features: ['캠퍼스 내', '안전한 코스', '평지', '야간 조명'],
+              isSpecialCourse: true,
+              simulationType: 'injeCampus',
+              waypoints: [
+                { lat: 35.245000, lng: 128.903000, label: '정문' },
+                { lat: 35.246500, lng: 128.904500, label: '동쪽' },
+                { lat: 35.245000, lng: 128.906000, label: '북쪽' },
+                { lat: 35.243500, lng: 128.904500, label: '서쪽' },
+                { lat: 35.245000, lng: 128.903000, label: '정문' }
+              ]
+            }
+          ];
+          
+          // 코스 배열 맨 앞에 추가
+          nearbyCourses = [...injeCoursesSpecial, ...nearbyCourses];
+          
+        // 부산 지역일 때
+        } else if (location.lat >= 35.0 && location.lat <= 35.4 && 
+                   location.lng >= 128.8 && location.lng <= 129.3) {
           // 부산 지역이면 특별 코스들 추가
           const specialCourses = [
             {

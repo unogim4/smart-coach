@@ -49,6 +49,143 @@ export const getCurrentLocation = () => {
   });
 };
 
+// 🏫 김해 인제대학교 지역 확인
+const isInjeUniversityArea = (location) => {
+  // 인제대학교 김해캠퍼스 중심 좌표: 35.245, 128.903
+  const injeLat = 35.245;
+  const injeLng = 128.903;
+  const radius = 0.015; // 약 1.5km 반경
+  
+  return Math.abs(location.lat - injeLat) < radius && 
+         Math.abs(location.lng - injeLng) < radius;
+};
+
+// 🏃 김해 인제대학교 전용 러닝 코스
+const getInjeUniversityCourses = () => {
+  console.log('🎓 인제대학교 전용 코스 생성 중...');
+  
+  const courses = [
+    {
+      id: 'inje-course-1',
+      name: '🌳 활천로 트레킹 코스',
+      description: '인제대 주변 활천로를 따라가는 편도 코스',
+      type: 'oneway',
+      difficulty: DIFFICULTY_LEVELS.MEDIUM,
+      distance: 2850,
+      estimatedDistance: '2.8km',
+      estimatedTime: '18분',
+      elevationGain: '+25m',
+      startPoint: {
+        lat: 35.242496,
+        lng: 128.898978,
+        address: '김해시 활천로 시작점'
+      },
+      endPoint: {
+        lat: 35.244144,
+        lng: 128.914770,
+        address: '김해시 활천로 도착점'
+      },
+      waypoints: [
+        { lat: 35.242496, lng: 128.898978, label: '출발' },
+        { lat: 35.242461, lng: 128.905844, label: '중간점' },
+        { lat: 35.244144, lng: 128.914770, label: '도착' }
+      ],
+      features: ['편도 코스', '트레킹 적합', '자연 경관', '활천로'],
+      icon: '🌲',
+      rating: 4.8,
+      vicinity: '김해시 활천로',
+      courseType: '트레킹',
+      weatherSuitability: ['맑음', '흐림'],
+      isOpen: true,
+      safetyLevel: 'high',
+      roadType: '산책로',
+      trafficLevel: '낮음',
+      realPlace: true,
+      isCircular: false,
+      isRoadBased: true
+    },
+    {
+      id: 'inje-course-2',
+      name: '🏘️ 삼안로 순환 코스',
+      description: '삼안로를 따라 도는 순환형 러닝 코스',
+      type: 'circular',
+      difficulty: DIFFICULTY_LEVELS.EASY,
+      distance: 1650,
+      estimatedDistance: '1.7km',
+      estimatedTime: '10분',
+      elevationGain: '+10m',
+      startPoint: {
+        lat: 35.251977,
+        lng: 128.904782,
+        address: '김해시 삼안로 시작점'
+      },
+      endPoint: {
+        lat: 35.251320,
+        lng: 128.912078,
+        address: '김해시 삼안로 도착점'
+      },
+      waypoints: [
+        { lat: 35.251977, lng: 128.904782, label: '출발' },
+        { lat: 35.252099, lng: 128.908376, label: '경유1' },
+        { lat: 35.250347, lng: 128.908473, label: '경유2' },
+        { lat: 35.251320, lng: 128.912078, label: '도착' }
+      ],
+      features: ['순환 코스', '주택가', '평지', '초보자 적합'],
+      icon: '🏘️',
+      rating: 4.6,
+      vicinity: '김해시 삼안로',
+      courseType: '도로',
+      weatherSuitability: ['맑음', '흐림', '구름조금'],
+      isOpen: true,
+      safetyLevel: 'very_high',
+      roadType: '일반도로',
+      trafficLevel: '보통',
+      realPlace: true,
+      isCircular: true,
+      isRoadBased: true
+    },
+    {
+      id: 'inje-course-3',
+      name: '🎓 캠퍼스 둘레길',
+      description: '인제대학교 캠퍼스를 한 바퀴 도는 코스',
+      type: 'circular',
+      difficulty: DIFFICULTY_LEVELS.EASY,
+      distance: 2200,
+      estimatedDistance: '2.2km',
+      estimatedTime: '13분',
+      elevationGain: '+15m',
+      startPoint: {
+        lat: 35.245000,
+        lng: 128.903000,
+        address: '인제대학교 정문'
+      },
+      waypoints: [
+        { lat: 35.245000, lng: 128.903000, label: '정문' },
+        { lat: 35.246500, lng: 128.904500, label: '동쪽' },
+        { lat: 35.245000, lng: 128.906000, label: '북쪽' },
+        { lat: 35.243500, lng: 128.904500, label: '서쪽' },
+        { lat: 35.245000, lng: 128.903000, label: '정문' }
+      ],
+      features: ['캠퍼스 내', '안전한 코스', '평지', '야간 조명'],
+      icon: '🏫',
+      rating: 4.9,
+      vicinity: '인제대학교 김해캠퍼스',
+      courseType: '캠퍼스',
+      weatherSuitability: ['맑음', '흐림', '구름조금', '비조금'],
+      isOpen: true,
+      safetyLevel: 'very_high',
+      roadType: '캠퍼스 도로',
+      trafficLevel: '매우 낮음',
+      realPlace: true,
+      isCircular: true,
+      isRoadBased: true
+    }
+  ];
+  
+  console.log(`✅ 인제대학교 전용 ${courses.length}개 코스 생성 완료`);
+  return courses;
+};
+
 // 🚸 가장 가까운 도로로 위치 조정 (Geocoding)
 const snapToNearestRoad = async (location) => {
   try {
